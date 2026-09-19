@@ -9,6 +9,7 @@ import (
 	"github.com/jwp23/agent-downlink/internal/config"
 	"github.com/jwp23/agent-downlink/internal/rclone"
 	"github.com/jwp23/agent-downlink/internal/runlog"
+	"github.com/jwp23/agent-downlink/internal/status"
 	"github.com/jwp23/agent-downlink/internal/transfer"
 )
 
@@ -36,14 +37,14 @@ func runCycle(e env, name string, quietWhenBusy bool, steps func(*transfer.Cycle
 	cycle, err := loadCycle(e.home, paths, errors)
 	if err != nil {
 		_, _ = fmt.Fprintf(errors, "agent-downlink %s: %v\n", name, err)
-		_ = runlog.New(paths.LogFile).Append(time.Now(), "startup", "FAILED", err.Error())
+		recordStartupFailure(paths, err)
 		return 1
 	}
 
 	release, acquired, err := transfer.Lock(paths.LockFile)
 	if err != nil {
 		_, _ = fmt.Fprintf(errors, "agent-downlink %s: %v\n", name, err)
-		_ = runlog.New(paths.LogFile).Append(time.Now(), "startup", "FAILED", err.Error())
+		recordStartupFailure(paths, err)
 		return 1
 	}
 	if !acquired {
@@ -59,6 +60,18 @@ func runCycle(e env, name string, quietWhenBusy bool, steps func(*transfer.Cycle
 		return 1
 	}
 	return 0
+}
+
+// recordStartupFailure notes a failure that happened before there was a Cycle to record it,
+// so it reaches both the log and status.json: a person running `agent-downlink status` must
+// see a broken config or a missing rclone, not steps that quietly stopped running.
+func recordStartupFailure(paths config.Paths, err error) {
+	now := time.Now()
+	_ = runlog.New(paths.LogFile).Append(now, "startup", "FAILED", err.Error())
+	if st, loadErr := status.Load(paths.StatusFile); loadErr == nil {
+		st.Record("startup", now, false, err.Error())
+		_ = st.Save(paths.StatusFile)
+	}
 }
 
 func loadCycle(home string, paths config.Paths, errors io.Writer) (*transfer.Cycle, error) {

@@ -30,6 +30,14 @@ func TestCopyArgs(t *testing.T) {
 	}
 }
 
+func TestObscureArgs(t *testing.T) {
+	got := obscureArgs("/cfg/rclone.conf")
+	want := []string{"--config", "/cfg/rclone.conf", "obscure", "-"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("obscureArgs = %q\nwant %q", got, want)
+	}
+}
+
 func TestClassify(t *testing.T) {
 	cases := []struct {
 		name       string

@@ -138,6 +138,10 @@ func TestRefusesToRunOnLoosePermissions(t *testing.T) {
 	if !strings.Contains(string(log), "startup  FAILED") {
 		t.Errorf("log = %q, want the startup failure", log)
 	}
+	st, _ := status.Load(paths.StatusFile)
+	if st.Steps["startup"].Error == "" {
+		t.Errorf("status = %+v, want a startup failure so it is visible to `agent-downlink status`", st.Steps)
+	}
 }
 
 func TestUnconfiguredMachinePointsAtSetup(t *testing.T) {

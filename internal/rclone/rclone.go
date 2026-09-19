@@ -66,10 +66,14 @@ func (r *Runner) Copy(ctx context.Context, src, dst string) Result {
 	}
 }
 
+func obscureArgs(configPath string) []string {
+	return []string{"--config", configPath, "obscure", "-"}
+}
+
 // Obscure converts a password to the form rclone.conf stores. The secret goes to rclone on
 // standard input.
 func (r *Runner) Obscure(ctx context.Context, secret string) (string, error) {
-	cmd := exec.CommandContext(ctx, r.binary, "obscure", "-")
+	cmd := exec.CommandContext(ctx, r.binary, obscureArgs(r.configPath)...)
 	cmd.Stdin = strings.NewReader(secret)
 	out, err := cmd.Output()
 	if err != nil {

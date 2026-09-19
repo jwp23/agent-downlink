@@ -4,3 +4,6 @@
 *.db
 .beads-credential-key
 .beads/proxieddb/
+
+# Local beads audit trail; the issue data itself syncs through Dolt
+.beads/interactions.jsonl

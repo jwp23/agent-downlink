@@ -64,6 +64,21 @@ cp -rf source dest          # NOT: cp -r source dest
 - `apt-get` - use `-y` flag
 - `brew` - use `HOMEBREW_NO_AUTO_UPDATE=1` env var
 
+
+## SonarCloud Drift
+
+The SonarCloud drift audit job runs on every push to main and creates a transient GitHub issue when unreviewed hotspots or open issues are found. The issue tracks how many findings accumulate on main since the last fix round; fixes are tracked in beads, not in the issue (the GitHub issue itself is transient and auto-closes when findings are resolved).
+
+To run the audit script locally with coverage reporting only (no GitHub issue creation):
+```bash
+SONAR_TOKEN=<token> ./tools/sonar-audit.sh --report-only
+```
+To check a different branch:
+```bash
+SONAR_TOKEN=<token> ./tools/sonar-audit.sh --report-only --branch <branch>
+```
+
+
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:6cd5cc61 -->
 ## Beads Issue Tracker
 

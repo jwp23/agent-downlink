@@ -126,6 +126,19 @@ Use red/green TDD for every feature and bugfix: write a failing test, watch it f
 minimum code to pass, refactor while green. Markdown and config files are exempt. Go-specific
 test rules load from `.claude/rules/go-testing.md` when you touch Go files.
 
+## SonarCloud Drift
+
+The SonarCloud drift audit job runs on every push to main and creates a transient GitHub issue when unreviewed hotspots or open issues are found. The issue tracks how many findings accumulate on main since the last fix round; fixes are tracked in beads, not in the issue (the GitHub issue itself is transient and auto-closes when findings are resolved).
+
+To run the audit script locally with coverage reporting only (no GitHub issue creation):
+```bash
+SONAR_TOKEN=<token> ./tools/sonar-audit.sh --report-only
+```
+To check a different branch:
+```bash
+SONAR_TOKEN=<token> ./tools/sonar-audit.sh --report-only --branch <branch>
+```
+
 ## Dependencies
 
 rclone is the only thing a user installs; every Go dependency is compiled into the binary.

@@ -78,8 +78,3 @@ func dispatch(e env, args []string) int {
 	}
 	return cmd(e, args[1:])
 }
-
-func notImplemented(e env, name string) int {
-	_, _ = fmt.Fprintf(e.stderr, "agent-downlink %s: not implemented\n", name)
-	return 1
-}

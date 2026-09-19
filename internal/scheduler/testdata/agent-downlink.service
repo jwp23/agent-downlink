@@ -1,0 +1,6 @@
+[Unit]
+Description=agent-downlink: archive agent session records
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/agent-downlink run

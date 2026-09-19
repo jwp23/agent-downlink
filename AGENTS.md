@@ -5,8 +5,17 @@ Project scope, invariants, code style, and reference documents are in `CLAUDE.md
 
 ## Build & Test
 
-The Go module does not exist yet. The feature that creates it (`agent-downlink-eu4.1`) adds the
-build, test, and lint commands here. rclone must be installed to run the integration tests.
+rclone and golangci-lint must be installed; integration tests fail, rather than skip, without rclone.
+The pre-commit hook in `.beads/hooks/pre-commit` runs the first four commands below on every commit.
+
+```bash
+go build .                      # builds ./agent-downlink
+gofmt -l .                      # must print nothing
+go vet ./...
+golangci-lint run               # config in .golangci.yml
+go test ./...                   # unit and integration tests (real rclone, local directory bucket)
+go test -tags e2e ./e2e/ -v     # end-to-end against a real B2 scratch bucket; never in CI; see e2e/README.md
+```
 
 This project uses **bd** (beads) for issue tracking. Run `bd prime` for full workflow context.
 

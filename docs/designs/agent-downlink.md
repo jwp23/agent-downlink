@@ -83,7 +83,7 @@ the session ran.
 | `agent-downlink run` | What the timer invokes: the full cycle below. |
 | `agent-downlink push` | The cycle's local-copy and push steps, on demand. |
 | `agent-downlink pull` | The cycle's pull step, on demand. |
-| `agent-downlink status` | Age of each machine's last successful push and pull, and any recorded errors. |
+| `agent-downlink status` | Age of each machine's last successful push and pull, the most recent error of any failing step, and the path of the log file. |
 
 ### One run
 
@@ -94,25 +94,51 @@ the session ran.
 
 Every copy uses `rclone copy`, which never deletes at the destination.
 
+The push uploads from the mirror copy made in step 2, not from the agent's live directory, so
+an upload never reads a file that an agent is writing. Only the local copy in step 2 can meet
+a file that changes while it is read. rclone abandons that file, the run records a warning
+rather than a failure, and the next run copies it.
+
 ## Files on disk
 
 | Path | Contents |
 |---|---|
+| `~/.config/agent-downlink/` | Created by the tool with mode `0700`. |
 | `~/.config/agent-downlink/config.toml` | Non-secret settings: machine name, mirror path, sources to push. Written by `setup` with a comment on each field. |
 | `~/.config/agent-downlink/rclone.conf` | The storage key and one encryption password per readable machine. Mode `0600`; the tool refuses to run if permissions are looser. rclone is always pointed at this file, so the user's own rclone configuration is never touched. |
 | `~/.local/share/agent-downlink/mirror/` | The mirror. The path is configurable so it can sit on an encrypted volume. |
-| `~/.local/share/agent-downlink/status.json` | Per step and per machine: last attempt, last success, error text. Consumers may read it. |
+| `~/.local/state/agent-downlink/status.json` | Per step and per machine: last attempt, last success, error text. Consumers may read it. |
+| `~/.local/state/agent-downlink/agent-downlink.log` | The history: one line per step per run, plus rclone's full error output for a failed step. |
+
+### Logging
+
+The tool writes its own log file so that the answer to "where are the logs" is the same on
+every OS, whatever the scheduler does with a job's output. At about 5 MB the log is renamed to
+`agent-downlink.log.1`, replacing any earlier one, and a new log is started. Run by the timer,
+the tool prints nothing and relies on the file. Run by hand, it also prints errors to the
+terminal.
+
+The log holds file names, which include project paths and session identifiers. It never holds
+secrets.
+
+### Handling secrets
+
+Secrets never appear in the log or on a command line; other users on a machine can read a
+process's arguments. `setup` generates each encryption password, obscures it by piping it to
+`rclone obscure -` on standard input, and writes `rclone.conf` itself rather than passing
+passwords to `rclone config create`.
 
 ## Components
 
 | Component | Responsibility |
 |---|---|
-| `config` | Read and write `config.toml`; enforce and check file permissions. |
+| `config` | Read and write `config.toml` and `rclone.conf`; create the config directory; enforce and check permissions. |
 | `rclone` | The only code that executes rclone. Builds argument lists; interprets exit codes and output. |
 | `transfer` | The run cycle: local copy, push, pull. |
 | `plugintimeline` | Detect a changed plugin manifest and store a dated copy. |
 | `scheduler` | Generate and install a systemd user timer or a launchd agent that invokes `run` hourly. |
 | `status` | Record step outcomes; render the status report. |
+| `runlog` | Append to the log file and rotate it. |
 | `setup` | The interactive `setup` and `add-machine` flows, composed from the components above. |
 
 ## Failure handling
@@ -123,7 +149,12 @@ Every copy uses `rclone copy`, which never deletes at the destination.
 - A lock prevents overlapping runs; a run that finds the lock held exits quietly.
 - With no network, a run fails fast, records the failure, and prints nothing. The next run
   retries.
-- The timer definitions request catch-up of runs missed while the machine was off or asleep.
+- Runs missed while the machine was off or asleep are caught up with a single run. The systemd
+  timer uses a calendar schedule with `Persistent=true`. The launchd agent uses
+  `StartCalendarInterval`, because `StartInterval` skips runs that fall during sleep.
+- Neither scheduler runs while the user is logged out. On Linux the operator can change that
+  with `loginctl enable-linger`; a launchd agent cannot. Agents run while the user is logged
+  in, and catch-up covers the gap.
 - The tool does not alert on staleness, because a machine that is off looks like a machine
   that is broken. `status` shows ages and leaves the judgment to the operator.
 - The tool does not detect tampering. Recovery uses the bucket's retained versions and is a

@@ -12,3 +12,6 @@
   into the binary.
 - The status file is written by the tool and read by the tool or by a consumer. It is never
   hand-edited, and every language parses JSON natively, which keeps consumers decoupled.
+- The TOML library is `github.com/pelletier/go-toml/v2`. It has no dependencies of its own and
+  can emit a comment above each field when encoding. `github.com/BurntSushi/toml` also has no
+  dependencies but cannot write comments.

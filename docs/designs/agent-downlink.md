@@ -64,13 +64,16 @@ Machine names are lowercase letters, digits, and hyphens, chosen at setup and de
 the hostname. The machine name is the one thing the storage provider sees in plaintext, since
 each machine's encrypted area sits under it.
 
-Supporting another agent tool means adding a source path and a `<tool>` name. Records are
-stored raw; there is no cross-tool schema.
+The tool knows where each supported agent keeps its records, so the operator never has to.
+Claude Code is the first built-in. An operator can describe a tool that is not yet built in
+with a `[[custom_tools]]` table in `config.toml`, without a code change. Records are stored
+raw; there is no cross-tool schema.
 
 ### Plugin version timeline
 
 For Claude Code, each run stores a copy of `installed_plugins.json` under a UTC-timestamped
-name, only when its content differs from the latest stored copy. A consumer joins a
+name (`20060102T150405Z.json`, which sorts by time), only when its content differs from the
+latest stored copy. A consumer joins a
 transcript's timestamp against these copies to learn which plugin versions were installed when
 the session ran.
 
@@ -78,11 +81,12 @@ the session ran.
 
 | Command | Purpose |
 |---|---|
-| `agent-downlink setup` | Once per machine. Asks for a machine name and storage key, generates the machine's encryption password, writes the config files, installs the hourly timer, and prints what to save in the password manager. A flag omits the timer for a machine making a single push. |
+| `agent-downlink setup` | Once per machine. Asks for a machine name, the bucket name, and the storage key, generates the machine's encryption password, writes the config files, installs the hourly timer, and prints what to save in the password manager. A flag omits the timer for a machine making a single push. |
 | `agent-downlink add-machine <name>` | On a reader. Takes another machine's encryption password and makes that machine readable here. |
 | `agent-downlink run` | What the timer invokes: the full cycle below. |
 | `agent-downlink push` | The cycle's local-copy and push steps, on demand. |
 | `agent-downlink pull` | The cycle's pull step, on demand. |
+| `agent-downlink timer install` / `timer remove` | Install or remove the hourly schedule on its own: for a machine set up without it, or one being retired. |
 | `agent-downlink status` | Age of each machine's last successful push and pull, the most recent error of any failing step, and the path of the log file. |
 
 ### One run
@@ -104,11 +108,30 @@ rather than a failure, and the next run copies it.
 | Path | Contents |
 |---|---|
 | `~/.config/agent-downlink/` | Created by the tool with mode `0700`. |
-| `~/.config/agent-downlink/config.toml` | Non-secret settings: machine name, mirror path, sources to push. Written by `setup` with a comment on each field. |
+| `~/.config/agent-downlink/config.toml` | Non-secret settings: machine name, storage location, mirror path, tools to archive. Written by `setup` with a comment on each field. |
 | `~/.config/agent-downlink/rclone.conf` | The storage key and one encryption password per readable machine. Mode `0600`; the tool refuses to run if permissions are looser. rclone is always pointed at this file, so the user's own rclone configuration is never touched. |
 | `~/.local/share/agent-downlink/mirror/` | The mirror. The path is configurable so it can sit on an encrypted volume. |
 | `~/.local/state/agent-downlink/status.json` | Per step and per machine: last attempt, last success, error text. Consumers may read it. |
 | `~/.local/state/agent-downlink/agent-downlink.log` | The history: one line per step per run, plus rclone's full error output for a failed step. |
+
+### config.toml
+
+| Field | Meaning |
+|---|---|
+| `machine` | This machine's name. |
+| `storage` | The rclone path of the bucket, `b2:<bucket>`. Each machine's encrypted area is `<storage>/<machine>`. Tests point it at a local directory. |
+| `mirror` | The mirror directory. |
+| `rclone` | Absolute path of the rclone binary, found by `setup`. Schedulers run jobs with a minimal `PATH` that may not include the directory rclone was installed to. |
+| `tools` | Names of the built-in tools to archive. `setup` writes `["claude-code"]`. The list is explicit so that a tool built in later is not switched on by an upgrade. |
+| `[[custom_tools]]` | Optional. A tool that is not built in: `name`, `root` (absolute path of its data directory), `paths` (sub-paths of `root` to archive), and optionally `plugin_manifest` (a file under `root` to keep a timeline of). |
+
+Each archived path is copied to `mirror/<machine>/<tool>/<path>`.
+
+### rclone.conf
+
+The storage remote is named `b2`. Each readable machine has a `crypt` remote named
+`crypt-<machine>` whose `remote` is `<storage>/<machine>`. The machines a pull reads are the
+`crypt-` remotes other than this machine's own.
 
 ### Logging
 

@@ -81,7 +81,7 @@ the session ran.
 
 | Command | Purpose |
 |---|---|
-| `agent-downlink setup` | Once per machine. Asks for a machine name, the bucket name, and the storage key, generates the machine's encryption password, writes the config files, installs the hourly timer, and prints what to save in the password manager. A flag omits the timer for a machine making a single push. |
+| `agent-downlink setup` | Once per machine. Asks for a machine name, the bucket name, and the storage key, generates the machine's encryption password (or accepts an existing one, for a machine that replaces one of the same name), writes the config files, installs the hourly timer, and prints what to save in the password manager. A flag omits the timer for a machine making a single push. |
 | `agent-downlink add-machine <name>` | On a reader. Takes another machine's encryption password and makes that machine readable here. |
 | `agent-downlink run` | What the timer invokes: the full cycle below. |
 | `agent-downlink push` | The cycle's local-copy and push steps, on demand. |

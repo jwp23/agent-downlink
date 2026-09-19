@@ -169,9 +169,16 @@ recommended on readers and not enforced.
 
 ## Development
 
+Install rclone and golangci-lint before running tests (integration tests fail without rclone).
+
 ```sh
-test -z "$(gofmt -l .)" && go vet ./... && go test ./...
+go build .                          # builds ./agent-downlink
+gofmt -l .                          # must print nothing
+go vet ./...
+golangci-lint run                   # config in .golangci.yml
+go test ./...                       # unit and integration tests
+go test -tags e2e ./e2e/ -v         # end-to-end against a real B2 bucket (see e2e/README.md)
 ```
 
-rclone must be installed to run the integration tests. CI runs the same checks on Linux and
-macOS.
+The first four commands run in the pre-commit hook. The e2e suite requires real B2 credentials
+and never runs in CI. CI runs the same checks on Linux and macOS.

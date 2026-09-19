@@ -60,18 +60,46 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 
 ## Build & Test
 
-_Add your build and test commands here_
-
-```bash
-# Example:
-# npm install
-# npm test
-```
+The Go module does not exist yet. The feature that creates it (`agent-downlink-eu4.1`) adds the
+build, test, and lint commands here. rclone must be installed to run the integration tests.
 
 ## Architecture Overview
 
-_Add a brief overview of your project architecture_
+`agent-downlink` is a single Go binary that wraps rclone. Each machine pushes its AI-agent
+session records to a client-side-encrypted Backblaze B2 bucket, and keeps a decrypted local
+mirror of every machine's records for other tools to read. It is transport and archive only.
+
+- `docs/designs/agent-downlink.md` is the living design. Read it before changing behavior, and
+  update it in place when the design changes.
+- `docs/adr/` and `docs/decisions/` record why. An ADR is history: supersede it with a new ADR,
+  never rewrite it.
 
 ## Conventions & Patterns
 
-_Add your project-specific conventions here_
+**This repository is public.** Treat everything stored in beads as public too, including
+`bd remember`, because the beads database syncs to the git remote. Every checked-in file and
+every bead describes a generic operator. Never record details
+of a real deployment: machine names, operating systems of particular machines, which disks are
+encrypted, bucket names, which password manager is used, or how many machines exist. Examples
+and test fixtures use placeholder machine names such as `workstation` and `laptop`.
+
+**Secrets never reach a log, a process argument, or test output.** Other users on a machine
+can read a process's arguments. Passwords go to rclone on standard input or through the
+tool's own `rclone.conf`.
+
+**Nothing deletes.** Every transfer is `rclone copy`. No code path removes or renames a file
+in a source directory, the mirror, or the bucket.
+
+**The mirror layout is the public interface.** Consumers depend on
+`<machine>/<tool>/<the tool's native tree>` as documented in the design. Changing it needs an
+ADR. The tool never imports or knows about a consumer.
+
+**One package executes rclone.** All other code goes through it.
+
+**Tests.** Follow test-driven development. Integration tests run the real rclone binary with
+real `crypt` encryption over a local directory; they do not mock rclone, and they fail rather
+than skip when rclone is absent. Tests against a real bucket sit behind a build tag and never
+run in CI. Test output must be pristine.
+
+**Verify, don't guess.** Confirm rclone flags, scheduler settings, and `b2` commands against
+primary documentation or the installed tool's `--help` before relying on them.

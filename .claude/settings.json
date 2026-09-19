@@ -1,4 +1,40 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(go build *)",
+      "Bash(go test *)",
+      "Bash(go vet *)",
+      "Bash(go mod tidy)",
+      "Bash(gofmt *)",
+      "Bash(rclone version)",
+      "Bash(rclone help *)",
+      "Bash(bd ready *)",
+      "Bash(bd show *)",
+      "Bash(bd list *)",
+      "Bash(bd blocked *)",
+      "Bash(bd search *)",
+      "Bash(bd stats *)",
+      "Bash(bd memories *)",
+      "Bash(bd prime *)",
+      "Bash(bd create *)",
+      "Bash(bd update *)",
+      "Bash(bd close *)",
+      "Bash(bd dep *)"
+    ],
+    "deny": [
+      "Read(~/.config/agent-downlink/rclone.conf)",
+      "Read(~/.config/rclone/rclone.conf)",
+      "Bash(rclone sync *)",
+      "Bash(rclone move *)",
+      "Bash(rclone moveto *)",
+      "Bash(rclone delete *)",
+      "Bash(rclone deletefile *)",
+      "Bash(rclone purge *)",
+      "Bash(rclone rmdir *)",
+      "Bash(rclone rmdirs *)",
+      "Bash(rclone cleanup *)"
+    ]
+  },
   "hooks": {
     "SessionStart": [
       {
@@ -9,6 +45,17 @@
           }
         ],
         "matcher": ""
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_response.filePath // .tool_input.file_path' | { read -r f; case \"$f\" in *.go) gofmt -w \"$f\" ;; esac; } 2>/dev/null || true"
+          }
+        ]
       }
     ]
   }

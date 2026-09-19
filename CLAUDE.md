@@ -1,6 +1,26 @@
-# Project Instructions for AI Agents
+# agent-downlink
 
-This file provides instructions and context for AI coding agents working on this project.
+A single Go binary that wraps rclone. Each machine pushes its AI-agent session records to a
+client-side-encrypted Backblaze B2 bucket and keeps a decrypted local mirror of every readable
+machine's records for other tools to read. Transport and archive only. Linux and macOS.
+
+## Tech Stack
+
+Go (version from `go.mod`), standard library first. Dependencies: `github.com/pelletier/go-toml/v2`
+(config), `golang.org/x/term` (secret input). rclone is the only runtime prerequisite. systemd
+user timer on Linux, launchd agent on macOS. GitHub Actions CI on both.
+
+## What This Project Does NOT Do
+
+Refuse these, or raise them with the operator, rather than building them:
+
+- No consumer features: no dashboards, transcript parsing, cross-tool schema, or scrubbing of
+  records. The tool never imports or knows about a consumer.
+- No deletion, sync, or pruning of a source directory, the mirror, or the bucket.
+- No automated provisioning of buckets, lifecycle rules, or storage keys. That is a runbook
+  procedure, so no administrative credential ever rests on disk.
+- No server, daemon, staleness alerting, or tamper detection.
+- No Windows support.
 
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:6cd5cc61 -->
 ## Beads Issue Tracker
@@ -63,43 +83,54 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 The Go module does not exist yet. The feature that creates it (`agent-downlink-eu4.1`) adds the
 build, test, and lint commands here. rclone must be installed to run the integration tests.
 
-## Architecture Overview
+## Invariants
 
-`agent-downlink` is a single Go binary that wraps rclone. Each machine pushes its AI-agent
-session records to a client-side-encrypted Backblaze B2 bucket, and keeps a decrypted local
-mirror of every machine's records for other tools to read. It is transport and archive only.
+Each of these is a security or data-loss guardrail with no exceptions.
 
-- `docs/designs/agent-downlink.md` is the living design. Read it before changing behavior, and
-  update it in place when the design changes.
-- `docs/adr/` and `docs/decisions/` record why. An ADR is history: supersede it with a new ADR,
-  never rewrite it.
+- **This repository is public, and so is everything in beads** (`bd remember` included; the
+  beads database syncs to the git remote). Describe a generic operator. Never record a real
+  deployment: machine names, which OS a machine runs, which disks are encrypted, bucket names,
+  the password manager in use, or how many machines exist. Examples and fixtures use
+  placeholder machine names such as `workstation` and `laptop`.
+- **Secrets never reach a log, a process argument, or test output.** Other users on a machine
+  can read a process's arguments.
+- **Nothing deletes.** Every transfer is `rclone copy`. No code path removes or renames a file
+  in a source directory, the mirror, or the bucket.
+- **The mirror layout is the public interface**: `<machine>/<tool>/<the tool's native tree>`.
+  Changing it needs an ADR.
+- **Only `internal/rclone` executes rclone.** All other code goes through it.
 
-## Conventions & Patterns
+## Code Style
 
-**This repository is public.** Treat everything stored in beads as public too, including
-`bd remember`, because the beads database syncs to the git remote. Every checked-in file and
-every bead describes a generic operator. Never record details
-of a real deployment: machine names, operating systems of particular machines, which disks are
-encrypted, bucket names, which password manager is used, or how many machines exist. Examples
-and test fixtures use placeholder machine names such as `workstation` and `laptop`.
+- `package main` at the repo root holds dispatch and one `cmd_<area>.go` per command group.
+  Components are `internal/<name>` packages named as in the design's Components table.
+- Commands take everything from the process through the `env` struct and return an exit
+  status, so tests substitute all of it. Do not read `os.Stdin`, `os.Args`, or the home
+  directory anywhere but `main`.
+- Verify, don't guess: confirm rclone flags, systemd and launchd settings, and `b2` commands
+  against primary documentation or the installed tool's `--help` before relying on them.
+- When conventions and simplicity conflict, simplicity wins.
 
-**Secrets never reach a log, a process argument, or test output.** Other users on a machine
-can read a process's arguments. Passwords go to rclone on standard input or through the
-tool's own `rclone.conf`.
+## Testing
 
-**Nothing deletes.** Every transfer is `rclone copy`. No code path removes or renames a file
-in a source directory, the mirror, or the bucket.
+Use red/green TDD for every feature and bugfix: write a failing test, watch it fail, write the
+minimum code to pass, refactor while green. Markdown and config files are exempt. Go-specific
+test rules load from `.claude/rules/go-testing.md` when you touch Go files.
 
-**The mirror layout is the public interface.** Consumers depend on
-`<machine>/<tool>/<the tool's native tree>` as documented in the design. Changing it needs an
-ADR. The tool never imports or knows about a consumer.
+## Dependencies
 
-**One package executes rclone.** All other code goes through it.
+rclone is the only thing a user installs; every Go dependency is compiled into the binary.
+Adding one needs a decision record in `docs/decisions/` that names the alternatives rejected.
 
-**Tests.** Follow test-driven development. Integration tests run the real rclone binary with
-real `crypt` encryption over a local directory; they do not mock rclone, and they fail rather
-than skip when rclone is absent. Tests against a real bucket sit behind a build tag and never
-run in CI. Test output must be pristine.
+## Reference Documents
 
-**Verify, don't guess.** Confirm rclone flags, scheduler settings, and `b2` commands against
-primary documentation or the installed tool's `--help` before relying on them.
+**IMPORTANT:** Before starting any task, identify which docs below are relevant and read them first. Load the full context before making changes.
+
+- `docs/designs/agent-downlink.md` — Read before changing any behavior. The living design:
+  layout contract, commands, run cycle, files on disk, components, failure handling, security
+  model, test layers. Update it in place when the design changes.
+- `docs/adr/*.md` — Read when a change touches encryption, storage provider, local secrets, or
+  the language and distribution choice. An ADR is history: supersede it with a new ADR, never
+  rewrite it.
+- `docs/decisions/*.md` — Read when working on naming, config or status formats, or terminal
+  secret input. Lighter decisions: a Decision section and a Rationale section.

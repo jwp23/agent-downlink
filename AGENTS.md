@@ -1,5 +1,13 @@
 # Agent Instructions
 
+Project scope, invariants, code style, and reference documents are in `CLAUDE.md`. Rules are in
+`.claude/rules/`. Read them before changing anything; they apply to every agent.
+
+## Build & Test
+
+The Go module does not exist yet. The feature that creates it (`agent-downlink-eu4.1`) adds the
+build, test, and lint commands here. rclone must be installed to run the integration tests.
+
 This project uses **bd** (beads) for issue tracking. Run `bd prime` for full workflow context.
 
 > **Architecture in one line:** Issues live in a local Dolt database

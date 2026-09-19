@@ -1,0 +1,83 @@
+// Package rclone is the only code that executes rclone. It builds argument lists and
+// interprets exit statuses and output. Secrets never go into an argument list: other users on
+// a machine can read process arguments.
+package rclone
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"os/exec"
+	"strings"
+)
+
+// ErrNotInstalled means there is no rclone to run.
+var ErrNotInstalled = errors.New("rclone is not installed or could not be found; install it from https://rclone.org/install/")
+
+// Runner runs rclone against the tool's own rclone.conf, never the user's.
+type Runner struct {
+	binary     string
+	configPath string
+}
+
+// New finds rclone. An empty binary means search PATH.
+func New(binary, configPath string) (*Runner, error) {
+	if binary == "" {
+		found, err := exec.LookPath("rclone")
+		if err != nil {
+			return nil, ErrNotInstalled
+		}
+		binary = found
+	} else if _, err := os.Stat(binary); err != nil {
+		return nil, fmt.Errorf("%w (looked for %s)", ErrNotInstalled, binary)
+	}
+	return &Runner{binary: binary, configPath: configPath}, nil
+}
+
+// Binary is the path of the rclone in use.
+func (r *Runner) Binary() string { return r.binary }
+
+func copyArgs(configPath, src, dst string) []string {
+	return []string{
+		"--config", configPath, "copy",
+		"--use-json-log", "--skip-links",
+		// Fail fast when offline; the hourly timer is the retry loop.
+		"--contimeout", "15s", "--retries", "1", "--low-level-retries", "3",
+		src, dst,
+	}
+}
+
+// Copy runs "rclone copy", which never deletes anything at the destination.
+func (r *Runner) Copy(ctx context.Context, src, dst string) Result {
+	cmd := exec.CommandContext(ctx, r.binary, copyArgs(r.configPath, src, dst)...)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	var exitErr *exec.ExitError
+	switch {
+	case err == nil:
+		return classify(0, stderr.Bytes())
+	case errors.As(err, &exitErr):
+		return classify(exitErr.ExitCode(), stderr.Bytes())
+	default:
+		return Result{Outcome: Failure, ExitCode: -1, Output: fmt.Sprintf("could not run rclone: %v", err)}
+	}
+}
+
+// Obscure converts a password to the form rclone.conf stores. The secret goes to rclone on
+// standard input.
+func (r *Runner) Obscure(ctx context.Context, secret string) (string, error) {
+	cmd := exec.CommandContext(ctx, r.binary, "obscure", "-")
+	cmd.Stdin = strings.NewReader(secret)
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("rclone obscure failed: %w", err)
+	}
+	obscured := strings.TrimSpace(string(out))
+	if obscured == "" {
+		return "", errors.New("rclone obscure printed nothing")
+	}
+	return obscured, nil
+}

@@ -16,6 +16,9 @@ import (
 // ErrNotInstalled means there is no rclone to run.
 var ErrNotInstalled = errors.New("rclone is not installed or could not be found; install it from https://rclone.org/install/")
 
+// configFlag names rclone's config file flag, common to every invocation the Runner makes.
+const configFlag = "--config"
+
 // Runner runs rclone against the tool's own rclone.conf, never the user's.
 type Runner struct {
 	binary     string
@@ -41,7 +44,7 @@ func (r *Runner) Binary() string { return r.binary }
 
 func copyArgs(configPath, src, dst string) []string {
 	return []string{
-		"--config", configPath, "copy",
+		configFlag, configPath, "copy",
 		"--use-json-log", "--skip-links",
 		// Fail fast when offline; the hourly timer is the retry loop.
 		"--contimeout", "15s", "--retries", "1", "--low-level-retries", "3",
@@ -70,7 +73,7 @@ func (r *Runner) Copy(ctx context.Context, src, dst string) Result {
 // provider like B2 keeps of a superseded file. This is a diagnostics operation: the tool
 // itself never calls it, only tests inspecting what a provider actually stored.
 func (r *Runner) ListFileVersions(ctx context.Context, path string) ([]string, error) {
-	cmd := exec.CommandContext(ctx, r.binary, "--config", r.configPath, "lsf", "-R", "--files-only", "--b2-versions", path)
+	cmd := exec.CommandContext(ctx, r.binary, configFlag, r.configPath, "lsf", "-R", "--files-only", "--b2-versions", path)
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("rclone lsf failed: %w", err)
@@ -79,7 +82,7 @@ func (r *Runner) ListFileVersions(ctx context.Context, path string) ([]string, e
 }
 
 func obscureArgs(configPath string) []string {
-	return []string{"--config", configPath, "obscure", "-"}
+	return []string{configFlag, configPath, "obscure", "-"}
 }
 
 // Obscure converts a password to the form rclone.conf stores. The secret goes to rclone on

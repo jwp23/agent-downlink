@@ -134,8 +134,28 @@ func (f File) Save(path string) error {
 		_ = tmp.Close()
 		return err
 	}
+	// Sync the file's content, then the rename, then the directory entry the rename changed:
+	// without this a power loss right after Save returns can lose the new config.toml, or
+	// leave the directory pointing at neither the old file nor the new one.
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return err
+	}
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tmp.Name(), path)
+	if err := os.Rename(tmp.Name(), path); err != nil {
+		return err
+	}
+	return syncDir(dir)
+}
+
+// syncDir flushes a directory's own metadata (such as a rename's new entry) to disk.
+func syncDir(dir string) error {
+	d, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = d.Close() }()
+	return d.Sync()
 }

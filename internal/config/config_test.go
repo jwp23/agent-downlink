@@ -97,13 +97,20 @@ func TestValidate(t *testing.T) {
 	}{
 		"bad machine":            {func(f *File) { f.Machine = "Work Station" }, "lowercase letters, digits, and hyphens"},
 		"empty storage":          {func(f *File) { f.Storage = "" }, "storage"},
+		"relative storage":       {func(f *File) { f.Storage = "scratch-bucket" }, "storage"},
 		"relative mirror":        {func(f *File) { f.Mirror = "mirror" }, "mirror must be an absolute path"},
 		"relative rclone":        {func(f *File) { f.Rclone = "rclone" }, "rclone must be an absolute path"},
 		"unknown tool":           {func(f *File) { f.Tools = []string{"nonesuch"} }, `unknown tool "nonesuch"`},
 		"custom shadows builtin": {func(f *File) { f.CustomTools = []CustomTool{{Name: "claude-code", Root: "/x", Paths: []string{"a"}}} }, "built in"},
-		"custom bad name":        {func(f *File) { f.CustomTools = []CustomTool{{Name: "Bad Name", Root: "/x", Paths: []string{"a"}}} }, "lowercase letters, digits, and hyphens"},
-		"custom relative root":   {func(f *File) { f.CustomTools = []CustomTool{{Name: "other", Root: "x", Paths: []string{"a"}}} }, "root must be an absolute path"},
-		"custom no paths":        {func(f *File) { f.CustomTools = []CustomTool{{Name: "other", Root: "/x"}} }, "at least one path"},
+		"duplicate custom tool name": {func(f *File) {
+			f.CustomTools = []CustomTool{
+				{Name: "other", Root: "/x", Paths: []string{"a"}},
+				{Name: "other", Root: "/y", Paths: []string{"b"}},
+			}
+		}, "duplicate"},
+		"custom bad name":      {func(f *File) { f.CustomTools = []CustomTool{{Name: "Bad Name", Root: "/x", Paths: []string{"a"}}} }, "lowercase letters, digits, and hyphens"},
+		"custom relative root": {func(f *File) { f.CustomTools = []CustomTool{{Name: "other", Root: "x", Paths: []string{"a"}}} }, "root must be an absolute path"},
+		"custom no paths":      {func(f *File) { f.CustomTools = []CustomTool{{Name: "other", Root: "/x"}} }, "at least one path"},
 		"custom escaping path": {func(f *File) {
 			f.CustomTools = []CustomTool{{Name: "other", Root: "/x", Paths: []string{"../secrets"}}}
 		}, "must stay inside root"},
@@ -127,5 +134,10 @@ func TestValidate(t *testing.T) {
 	empty.Rclone = "" // allowed: means "find rclone on PATH"
 	if err := empty.Validate(); err != nil {
 		t.Errorf("empty rclone: Validate() = %v", err)
+	}
+	localBucket := validFile()
+	localBucket.Storage = "/tmp/scratch-bucket" // an absolute local path stands in for B2 in integration tests
+	if err := localBucket.Validate(); err != nil {
+		t.Errorf("absolute local storage: Validate() = %v", err)
 	}
 }

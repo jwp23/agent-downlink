@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/pelletier/go-toml/v2"
 )
@@ -53,21 +54,33 @@ func (f File) Validate() error {
 	if f.Storage == "" {
 		return fmt.Errorf("storage is empty; it should be b2:<bucket-name>")
 	}
+	if !strings.HasPrefix(f.Storage, storageRemote+":") && !filepath.IsAbs(f.Storage) {
+		return fmt.Errorf("storage must be b2:<bucket-name> or an absolute path, got %q", f.Storage)
+	}
 	if !filepath.IsAbs(f.Mirror) {
 		return fmt.Errorf("mirror must be an absolute path, got %q", f.Mirror)
 	}
 	if f.Rclone != "" && !filepath.IsAbs(f.Rclone) {
 		return fmt.Errorf("rclone must be an absolute path or empty, got %q", f.Rclone)
 	}
+	names := map[string]bool{}
 	for _, name := range f.Tools {
 		if _, ok := builtinTools[name]; !ok {
 			return fmt.Errorf("unknown tool %q; built-in tools are %v", name, BuiltinToolNames())
 		}
+		if names[name] {
+			return fmt.Errorf("duplicate tool name %q", name)
+		}
+		names[name] = true
 	}
 	for _, c := range f.CustomTools {
 		if err := c.validate(); err != nil {
 			return err
 		}
+		if names[c.Name] {
+			return fmt.Errorf("duplicate tool name %q", c.Name)
+		}
+		names[c.Name] = true
 	}
 	return nil
 }

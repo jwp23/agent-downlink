@@ -40,6 +40,13 @@ func TestPlistEscapesTheBinaryPath(t *testing.T) {
 	}
 }
 
+func TestSystemdServiceQuotesTheBinaryPath(t *testing.T) {
+	got := SystemdService(`/home/u/R&D "tools"/agent-downlink`)
+	if !strings.Contains(got, `ExecStart="/home/u/R&D \"tools\"/agent-downlink" run`) {
+		t.Errorf("service unit does not quote a path with whitespace and quotes:\n%s", got)
+	}
+}
+
 type recorder struct {
 	calls [][]string
 	fail  map[string]error // keyed by the first argument after the program name

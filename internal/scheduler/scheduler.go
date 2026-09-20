@@ -30,7 +30,27 @@ func SystemdService(binary string) string {
 		"\n" +
 		"[Service]\n" +
 		"Type=oneshot\n" +
-		"ExecStart=" + binary + " run\n"
+		"ExecStart=" + systemdQuote(binary) + " run\n"
+}
+
+// systemdQuote quotes a single ExecStart= argument per systemd.syntax(7): ExecStart= splits
+// its value into words the same way a shell would, so a binary path with whitespace needs
+// quoting, and a literal double quote or backslash inside it needs escaping. A path with none
+// of those characters is left as-is.
+func systemdQuote(s string) string {
+	if !strings.ContainsAny(s, " \t\"\\") {
+		return s
+	}
+	var b strings.Builder
+	b.WriteByte('"')
+	for _, r := range s {
+		if r == '"' || r == '\\' {
+			b.WriteByte('\\')
+		}
+		b.WriteRune(r)
+	}
+	b.WriteByte('"')
+	return b.String()
 }
 
 // SystemdTimer fires hourly. Persistent=true runs once at login for runs missed while off.

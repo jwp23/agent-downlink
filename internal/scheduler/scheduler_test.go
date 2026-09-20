@@ -54,6 +54,18 @@ func TestSystemdServiceQuotesTheBinaryPath(t *testing.T) {
 	}
 }
 
+func TestSystemdServiceDoublesExpansionCharacters(t *testing.T) {
+	// ExecStart= expands $ and % (variable and specifier substitution); a literal one must be
+	// doubled, per systemd.service(5).
+	got, err := SystemdService(`/home/u/50%-off $HOME/agent-downlink`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, `ExecStart="/home/u/50%%-off $$HOME/agent-downlink" run`) {
+		t.Errorf("service unit does not double $ and %%:\n%s", got)
+	}
+}
+
 func TestSystemdServiceRejectsControlCharactersInTheBinaryPath(t *testing.T) {
 	for name, binary := range map[string]string{
 		"newline": "/usr/local/bin/agent-downlink\n[Service]\nExecStart=/bin/evil",

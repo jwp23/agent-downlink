@@ -39,23 +39,30 @@ func SystemdService(binary string) (string, error) {
 
 // systemdQuote quotes a single ExecStart= argument per systemd.syntax(7): ExecStart= splits
 // its value into words the same way a shell would, so a binary path with whitespace needs
-// quoting, and a literal double quote or backslash inside it needs escaping. A path with none
-// of those characters is left as-is. A carriage return, line feed, or NUL is refused outright:
+// quoting, a literal double quote or backslash needs escaping, and a literal $ or % needs
+// doubling (both start systemd's own variable and specifier expansion). A path with none of
+// those characters is left as-is. A carriage return, line feed, or NUL is refused outright:
 // none can be escaped, and a newline could inject a new directive into the unit file.
 func systemdQuote(s string) (string, error) {
 	if strings.ContainsAny(s, "\r\n\x00") {
 		return "", fmt.Errorf("binary path %q contains a control character systemd cannot quote", s)
 	}
-	if !strings.ContainsAny(s, " \t\"\\") {
+	if !strings.ContainsAny(s, " \t\"\\$%") {
 		return s, nil
 	}
 	var b strings.Builder
 	b.WriteByte('"')
 	for _, r := range s {
-		if r == '"' || r == '\\' {
+		switch r {
+		case '"', '\\':
 			b.WriteByte('\\')
+			b.WriteRune(r)
+		case '$', '%':
+			b.WriteRune(r)
+			b.WriteRune(r)
+		default:
+			b.WriteRune(r)
 		}
-		b.WriteRune(r)
 	}
 	b.WriteByte('"')
 	return b.String(), nil

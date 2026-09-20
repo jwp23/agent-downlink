@@ -12,16 +12,26 @@ var (
 	second = time.Date(2026, 3, 2, 17, 5, 9, 0, time.FixedZone("west", -7*3600)) // 2026-03-03T00:05:09Z
 )
 
-func setup(t *testing.T, manifest string) (manifestPath, destDir string) {
+const manifestRelPath = "installed_plugins.json"
+
+// setup returns a tool root, the manifest's path relative to it, and the destination
+// directory, and writes the manifest's initial content when it is not empty.
+func setup(t *testing.T, manifest string) (root, relPath, destDir string) {
 	t.Helper()
-	dir := t.TempDir()
-	manifestPath = filepath.Join(dir, "installed_plugins.json")
+	root = t.TempDir()
 	if manifest != "" {
-		if err := os.WriteFile(manifestPath, []byte(manifest), 0o600); err != nil {
+		if err := os.WriteFile(filepath.Join(root, manifestRelPath), []byte(manifest), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
-	return manifestPath, filepath.Join(dir, "mirror", "workstation", "claude-code", "plugins", "installed_plugins")
+	return root, manifestRelPath, filepath.Join(root, "mirror", "workstation", "claude-code", "plugins", "installed_plugins")
+}
+
+func writeManifest(t *testing.T, root, relPath, content string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(root, relPath), []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func names(t *testing.T, dir string) []string {
@@ -38,8 +48,8 @@ func names(t *testing.T, dir string) []string {
 }
 
 func TestFirstRunStoresACopyNamedByUTCTime(t *testing.T) {
-	manifest, dest := setup(t, `{"plugins":{"a":"1.0.0"}}`)
-	stored, err := Store(manifest, dest, first)
+	root, relPath, dest := setup(t, `{"plugins":{"a":"1.0.0"}}`)
+	stored, err := Store(root, relPath, dest, first)
 	if err != nil || !stored {
 		t.Fatalf("Store = %v, %v; want true, nil", stored, err)
 	}
@@ -54,11 +64,11 @@ func TestFirstRunStoresACopyNamedByUTCTime(t *testing.T) {
 }
 
 func TestUnchangedManifestStoresNothing(t *testing.T) {
-	manifest, dest := setup(t, `{"plugins":{"a":"1.0.0"}}`)
-	if _, err := Store(manifest, dest, first); err != nil {
+	root, relPath, dest := setup(t, `{"plugins":{"a":"1.0.0"}}`)
+	if _, err := Store(root, relPath, dest, first); err != nil {
 		t.Fatal(err)
 	}
-	stored, err := Store(manifest, dest, second)
+	stored, err := Store(root, relPath, dest, second)
 	if err != nil || stored {
 		t.Fatalf("Store = %v, %v; want false, nil", stored, err)
 	}
@@ -68,14 +78,12 @@ func TestUnchangedManifestStoresNothing(t *testing.T) {
 }
 
 func TestChangedManifestStoresASecondCopyAndKeepsTheFirst(t *testing.T) {
-	manifest, dest := setup(t, `{"plugins":{"a":"1.0.0"}}`)
-	if _, err := Store(manifest, dest, first); err != nil {
+	root, relPath, dest := setup(t, `{"plugins":{"a":"1.0.0"}}`)
+	if _, err := Store(root, relPath, dest, first); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(manifest, []byte(`{"plugins":{"a":"1.1.0"}}`), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	stored, err := Store(manifest, dest, second)
+	writeManifest(t, root, relPath, `{"plugins":{"a":"1.1.0"}}`)
+	stored, err := Store(root, relPath, dest, second)
 	if err != nil || !stored {
 		t.Fatalf("Store = %v, %v; want true, nil", stored, err)
 	}
@@ -91,12 +99,12 @@ func TestChangedManifestStoresASecondCopyAndKeepsTheFirst(t *testing.T) {
 
 func TestRevertedManifestIsStoredAgain(t *testing.T) {
 	// The comparison is with the latest copy, not with every copy: a revert is an event.
-	manifest, dest := setup(t, "v1")
-	_, _ = Store(manifest, dest, first)
-	_ = os.WriteFile(manifest, []byte("v2"), 0o600)
-	_, _ = Store(manifest, dest, first.Add(time.Hour))
-	_ = os.WriteFile(manifest, []byte("v1"), 0o600)
-	stored, err := Store(manifest, dest, first.Add(2*time.Hour))
+	root, relPath, dest := setup(t, "v1")
+	_, _ = Store(root, relPath, dest, first)
+	writeManifest(t, root, relPath, "v2")
+	_, _ = Store(root, relPath, dest, first.Add(time.Hour))
+	writeManifest(t, root, relPath, "v1")
+	stored, err := Store(root, relPath, dest, first.Add(2*time.Hour))
 	if err != nil || !stored {
 		t.Fatalf("Store = %v, %v; want true, nil", stored, err)
 	}
@@ -106,8 +114,8 @@ func TestRevertedManifestIsStoredAgain(t *testing.T) {
 }
 
 func TestMissingManifestIsNotAnError(t *testing.T) {
-	manifest, dest := setup(t, "")
-	stored, err := Store(manifest, dest, first)
+	root, relPath, dest := setup(t, "")
+	stored, err := Store(root, relPath, dest, first)
 	if err != nil || stored {
 		t.Fatalf("Store = %v, %v; want false, nil", stored, err)
 	}
@@ -117,15 +125,33 @@ func TestMissingManifestIsNotAnError(t *testing.T) {
 }
 
 func TestACopyIsNeverOverwritten(t *testing.T) {
-	manifest, dest := setup(t, "v1")
-	_, _ = Store(manifest, dest, first)
-	_ = os.WriteFile(manifest, []byte("v2"), 0o600)
-	if _, err := Store(manifest, dest, first); err == nil { // same second
+	root, relPath, dest := setup(t, "v1")
+	_, _ = Store(root, relPath, dest, first)
+	writeManifest(t, root, relPath, "v2")
+	if _, err := Store(root, relPath, dest, first); err == nil { // same second
 		t.Error("Store overwrote or silently skipped a copy with the same timestamp; want an error so the next run stores it")
 	}
 	b, _ := os.ReadFile(filepath.Join(dest, "20260301T093000Z.json"))
 	if string(b) != "v1" {
 		t.Errorf("existing copy = %q, want it untouched", b)
+	}
+}
+
+func TestManifestSymlinkCannotEscapeRoot(t *testing.T) {
+	root, _, dest := setup(t, "")
+	outside := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outside, "secret.json"), []byte("outside root"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(outside, "secret.json"), filepath.Join(root, manifestRelPath)); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := Store(root, manifestRelPath, dest, first); err == nil {
+		t.Error("Store followed a symlink outside root, want an error")
+	}
+	if got := names(t, dest); len(got) != 0 {
+		t.Errorf("stored files = %v, want none", got)
 	}
 }
 

@@ -23,8 +23,11 @@ func DestDir(toolDir, manifestRelPath string) string {
 }
 
 // Store keeps a dated copy of the manifest when it differs from the latest stored copy.
-func Store(manifestPath, destDir string, now time.Time) (bool, error) {
-	current, err := os.ReadFile(manifestPath)
+// manifestRelPath is read from inside root: root is opened with os.OpenRoot, which refuses a
+// symlink that would lead outside root, so a custom tool's manifest path can never read a file
+// its own root does not contain.
+func Store(root, manifestRelPath, destDir string, now time.Time) (bool, error) {
+	current, err := readManifest(root, manifestRelPath)
 	if errors.Is(err, fs.ErrNotExist) {
 		return false, nil
 	}
@@ -50,16 +53,39 @@ func Store(manifestPath, destDir string, now time.Time) (bool, error) {
 		return false, err
 	}
 	name := filepath.Join(destDir, now.UTC().Format(timestampLayout)+".json")
-	// O_EXCL: a stored copy is history and is never overwritten.
-	f, err := os.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	// Written to a temporary file and published with a rename, so a write error, a close
+	// error, or the process dying mid-write never leaves a partial file at name: latestCopy
+	// would otherwise treat that partial file as the authoritative snapshot.
+	tmp, err := os.CreateTemp(destDir, ".plugintimeline-*")
 	if err != nil {
 		return false, err
 	}
-	if _, err := f.Write(current); err != nil {
-		_ = f.Close()
+	defer func() { _ = os.Remove(tmp.Name()) }() // a no-op once the rename has happened
+	if _, err := tmp.Write(current); err != nil {
+		_ = tmp.Close()
 		return false, err
 	}
-	return true, f.Close()
+	if err := tmp.Close(); err != nil {
+		return false, err
+	}
+	// O_EXCL semantics: a stored copy is history and is never overwritten, so this must fail
+	// rather than replace an existing name of the same timestamp. CreateTemp already makes
+	// the file 0600.
+	if err := os.Link(tmp.Name(), name); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// readManifest reads manifestRelPath from inside root through os.Root, so a symlink under a
+// custom tool's root cannot make the read land outside it.
+func readManifest(root, manifestRelPath string) ([]byte, error) {
+	r, err := os.OpenRoot(root)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = r.Close() }()
+	return r.ReadFile(filepath.FromSlash(manifestRelPath))
 }
 
 func latestCopy(destDir string) (string, error) {

@@ -54,7 +54,7 @@ func (c *Cycle) Pull(ctx context.Context) bool {
 	for _, machine := range c.Readable {
 		// The mirror root is created here as well as in the local copy: a pull can be the
 		// first thing a machine ever does, and the mirror holds decrypted transcripts.
-		if err := os.MkdirAll(c.Mirror, 0o700); err != nil {
+		if err := c.ensurePrivateMirror(); err != nil {
 			ok = c.record("pull:"+machine, rclone.Failure, err.Error()) && ok
 			continue
 		}
@@ -66,15 +66,24 @@ func (c *Cycle) Pull(ctx context.Context) bool {
 
 func (c *Cycle) machineDir() string { return filepath.Join(c.Mirror, c.Machine) }
 
+// ensurePrivateMirror creates the mirror root if it does not exist, and tightens its
+// permissions if it already exists but is not private: the mirror holds decrypted records, so
+// it must stay 0700 even when something outside the tool loosened it.
+func (c *Cycle) ensurePrivateMirror() error {
+	if err := os.MkdirAll(c.Mirror, 0o700); err != nil {
+		return err
+	}
+	return os.Chmod(c.Mirror, 0o700)
+}
+
 func (c *Cycle) storePlugins() bool {
 	var failures []string
 	for _, s := range c.Sources {
 		if s.PluginManifest == "" {
 			continue
 		}
-		manifest := filepath.Join(s.Root, filepath.FromSlash(s.PluginManifest))
 		dest := plugintimeline.DestDir(filepath.Join(c.machineDir(), s.Tool), s.PluginManifest)
-		if _, err := plugintimeline.Store(manifest, dest, c.Now()); err != nil {
+		if _, err := plugintimeline.Store(s.Root, s.PluginManifest, dest, c.Now()); err != nil {
 			failures = append(failures, fmt.Sprintf("%s: %v", s.Tool, err))
 		}
 	}
@@ -85,6 +94,9 @@ func (c *Cycle) storePlugins() bool {
 }
 
 func (c *Cycle) localCopy(ctx context.Context) bool {
+	if err := c.ensurePrivateMirror(); err != nil {
+		return c.record("local-copy", rclone.Failure, err.Error())
+	}
 	if err := os.MkdirAll(c.machineDir(), 0o700); err != nil {
 		return c.record("local-copy", rclone.Failure, err.Error())
 	}
@@ -108,6 +120,9 @@ func (c *Cycle) localCopy(ctx context.Context) bool {
 func (c *Cycle) push(ctx context.Context) bool {
 	// The folder must exist even when the local copy failed, so that push reports its own
 	// outcome rather than "directory not found".
+	if err := c.ensurePrivateMirror(); err != nil {
+		return c.record("push", rclone.Failure, err.Error())
+	}
 	if err := os.MkdirAll(c.machineDir(), 0o700); err != nil {
 		return c.record("push", rclone.Failure, err.Error())
 	}

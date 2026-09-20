@@ -31,6 +31,8 @@ jobs:
       - name: Install rclone (Linux)
         run: |
           set -euo pipefail
+          # Unpack outside the checkout: anything in the checkout is treated as project source.
+          cd "$RUNNER_TEMP"
           version=$(curl -fsS --proto '=https' --tlsv1.2 https://downloads.rclone.org/version.txt | awk '{print $2}')
           zip="rclone-${version}-linux-amd64.zip"
           curl -fsSO --proto '=https' --tlsv1.2 "https://downloads.rclone.org/${version}/${zip}"

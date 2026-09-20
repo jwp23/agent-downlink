@@ -170,21 +170,17 @@ func (s *Scheduler) Install() error {
 func (s *Scheduler) Remove() error {
 	switch s.GOOS {
 	case "linux":
-		installed := exists(filepath.Join(s.unitDir(), timerName))
-		if installed {
-			if err := s.Exec("systemctl", "--user", "disable", "--now", timerName); err != nil {
-				return err
-			}
+		// Stop the schedule whether or not its unit file is still here: the file can be gone
+		// (or never existed) while systemd still has the timer loaded from an earlier install.
+		if err := s.disableTimer(); err != nil {
+			return err
 		}
 		for _, name := range []string{timerName, serviceName} {
 			if err := removeIfPresent(filepath.Join(s.unitDir(), name)); err != nil {
 				return err
 			}
 		}
-		if installed {
-			return s.Exec("systemctl", "--user", "daemon-reload")
-		}
-		return nil
+		return s.Exec("systemctl", "--user", "daemon-reload")
 	case "darwin":
 		_ = s.Exec("launchctl", "bootout", s.launchdService()) // fails when not loaded; nothing to do then
 		return removeIfPresent(s.plistPath())
@@ -197,16 +193,22 @@ func (s *Scheduler) unsupported() error {
 	return fmt.Errorf("no scheduler support for %s; run 'agent-downlink run' hourly by other means", s.GOOS)
 }
 
+// disableTimer stops the timer if systemd has it loaded. systemctl reports a timer it has
+// never heard of as "does not exist", which is not a failure here: there is nothing to stop.
+// Any other error is real and is returned.
+func (s *Scheduler) disableTimer() error {
+	err := s.Exec("systemctl", "--user", "disable", "--now", timerName)
+	if err != nil && !strings.Contains(err.Error(), "does not exist") {
+		return err
+	}
+	return nil
+}
+
 func writeFile(path, content string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
 	return os.WriteFile(path, []byte(content), 0o644)
-}
-
-func exists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
 }
 
 func removeIfPresent(path string) error {

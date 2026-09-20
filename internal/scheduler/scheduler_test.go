@@ -185,6 +185,37 @@ func TestRemoveWhenNothingIsInstalledSucceeds(t *testing.T) {
 	}
 }
 
+func TestRemoveWhenNothingIsInstalledStillReportsARealSystemctlFailure(t *testing.T) {
+	exec := func(name string, args ...string) error { return errors.New("Failed to connect to bus") }
+	s := &Scheduler{Home: t.TempDir(), Binary: testBinary, GOOS: "linux", Exec: exec}
+	if err := s.Remove(); err == nil || !strings.Contains(err.Error(), "Failed to connect to bus") {
+		t.Errorf("Remove = %v, want the systemctl failure surfaced even though nothing was installed", err)
+	}
+}
+
+func TestRemoveToleratesDisablingATimerSystemdHasNeverLoaded(t *testing.T) {
+	var calls [][]string
+	exec := func(name string, args ...string) error {
+		calls = append(calls, append([]string{name}, args...))
+		if len(args) > 1 && args[1] == "disable" {
+			// The exact wording systemctl 255 prints for a unit it has never heard of.
+			return errors.New("Failed to disable unit: Unit agent-downlink.timer does not exist")
+		}
+		return nil
+	}
+	s := &Scheduler{Home: t.TempDir(), Binary: testBinary, GOOS: "linux", Exec: exec}
+	if err := s.Remove(); err != nil {
+		t.Errorf(`Remove = %v, want nil: "does not exist" means there was nothing to stop`, err)
+	}
+	want := [][]string{
+		{"systemctl", "--user", "disable", "--now", "agent-downlink.timer"},
+		{"systemctl", "--user", "daemon-reload"},
+	}
+	if !reflect.DeepEqual(calls, want) {
+		t.Errorf("Remove ran %v, want %v", calls, want)
+	}
+}
+
 func TestUnsupportedOS(t *testing.T) {
 	s := &Scheduler{Home: t.TempDir(), Binary: testBinary, GOOS: "windows", Exec: (&recorder{}).exec}
 	for name, err := range map[string]error{"Install": s.Install(), "Remove": s.Remove()} {

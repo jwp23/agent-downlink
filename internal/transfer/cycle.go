@@ -19,6 +19,13 @@ import (
 	"github.com/jwp23/agent-downlink/internal/status"
 )
 
+// Step names recorded to the log and status.json.
+const (
+	stepPlugins   = "plugins"
+	stepLocalCopy = "local-copy"
+	stepPush      = "push"
+)
+
 // Cycle is one machine's view of the archive.
 type Cycle struct {
 	Machine    string          // this machine's name
@@ -88,17 +95,17 @@ func (c *Cycle) storePlugins() bool {
 		}
 	}
 	if len(failures) > 0 {
-		return c.record("plugins", rclone.Failure, strings.Join(failures, "\n"))
+		return c.record(stepPlugins, rclone.Failure, strings.Join(failures, "\n"))
 	}
-	return c.record("plugins", rclone.Success, "")
+	return c.record(stepPlugins, rclone.Success, "")
 }
 
 func (c *Cycle) localCopy(ctx context.Context) bool {
 	if err := c.ensurePrivateMirror(); err != nil {
-		return c.record("local-copy", rclone.Failure, err.Error())
+		return c.record(stepLocalCopy, rclone.Failure, err.Error())
 	}
 	if err := os.MkdirAll(c.machineDir(), 0o700); err != nil {
-		return c.record("local-copy", rclone.Failure, err.Error())
+		return c.record(stepLocalCopy, rclone.Failure, err.Error())
 	}
 	worst := rclone.Success
 	var details []string
@@ -114,20 +121,20 @@ func (c *Cycle) localCopy(ctx context.Context) bool {
 			}
 		}
 	}
-	return c.record("local-copy", worst, strings.Join(details, "\n"))
+	return c.record(stepLocalCopy, worst, strings.Join(details, "\n"))
 }
 
 func (c *Cycle) push(ctx context.Context) bool {
 	// The folder must exist even when the local copy failed, so that push reports its own
 	// outcome rather than "directory not found".
 	if err := c.ensurePrivateMirror(); err != nil {
-		return c.record("push", rclone.Failure, err.Error())
+		return c.record(stepPush, rclone.Failure, err.Error())
 	}
 	if err := os.MkdirAll(c.machineDir(), 0o700); err != nil {
-		return c.record("push", rclone.Failure, err.Error())
+		return c.record(stepPush, rclone.Failure, err.Error())
 	}
 	res := c.Runner.Copy(ctx, c.machineDir(), config.CryptRemote(c.Machine))
-	return c.record("push", res.Outcome, res.Output)
+	return c.record(stepPush, res.Outcome, res.Output)
 }
 
 // record writes a step's outcome to the log and to status.json, echoes a failure for a person

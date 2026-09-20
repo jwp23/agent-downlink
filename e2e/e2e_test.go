@@ -7,9 +7,7 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -107,21 +105,18 @@ func mustSucceed(t *testing.T, m *machine, ok bool) {
 }
 
 // storedVersions counts every stored version of every file in a machine's area, old versions
-// included. This is the one place outside internal/rclone that executes rclone: it is a test
-// probe of the provider's versioning, not something the tool does. The storage key reaches
-// rclone through the config file, never the command line.
+// included: a test probe of the provider's versioning, not something the tool does.
 func storedVersions(t *testing.T, m *machine, bucket string) int {
 	t.Helper()
 	runner, err := rclone.New("", m.paths.RcloneConf)
 	if err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.Command(runner.Binary(), "--config", m.paths.RcloneConf, "lsf", "-R", "--files-only", "--b2-versions", "b2:"+bucket+"/"+m.name)
-	out, err := cmd.Output()
+	versions, err := runner.ListFileVersions(context.Background(), "b2:"+bucket+"/"+m.name)
 	if err != nil {
 		t.Fatalf("listing versions failed: %v", err)
 	}
-	return len(strings.Fields(string(out)))
+	return len(versions)
 }
 
 func names() (a, b string) {

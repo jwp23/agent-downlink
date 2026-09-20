@@ -66,6 +66,18 @@ func (r *Runner) Copy(ctx context.Context, src, dst string) Result {
 	}
 }
 
+// ListFileVersions lists every stored file at path, one per line, including every version a
+// provider like B2 keeps of a superseded file. This is a diagnostics operation: the tool
+// itself never calls it, only tests inspecting what a provider actually stored.
+func (r *Runner) ListFileVersions(ctx context.Context, path string) ([]string, error) {
+	cmd := exec.CommandContext(ctx, r.binary, "--config", r.configPath, "lsf", "-R", "--files-only", "--b2-versions", path)
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("rclone lsf failed: %w", err)
+	}
+	return strings.Fields(string(out)), nil
+}
+
 func obscureArgs(configPath string) []string {
 	return []string{"--config", configPath, "obscure", "-"}
 }

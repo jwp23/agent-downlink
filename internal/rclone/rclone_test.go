@@ -62,6 +62,37 @@ func TestNewFailsClearlyWhenRcloneIsAbsent(t *testing.T) {
 	}
 }
 
+// assertOnlyCiphertext walks the bucket area for machine and fails the test if any path or
+// file content carries one of the given plaintext markers. It returns the number of files
+// found.
+func assertOnlyCiphertext(t *testing.T, bucket, machine string, plainNames []string, plainContent string) int {
+	t.Helper()
+	files := 0
+	walkErr := filepath.WalkDir(bucket, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			t.Fatal(err)
+		}
+		rel, _ := filepath.Rel(filepath.Join(bucket, machine), path)
+		for _, plain := range plainNames {
+			if strings.Contains(rel, plain) {
+				t.Errorf("bucket path %q contains the plaintext name %q", rel, plain)
+			}
+		}
+		if !d.IsDir() {
+			files++
+			b, _ := os.ReadFile(path)
+			if strings.Contains(string(b), plainContent) {
+				t.Errorf("bucket file %q holds plaintext", rel)
+			}
+		}
+		return nil
+	})
+	if walkErr != nil {
+		t.Fatal(walkErr)
+	}
+	return files
+}
+
 func TestEncryptThenDecryptRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	confPath, bucket := writeCryptConf(t, realRunner(t, "/unused"), dir, "my-laptop-2", "placeholder-password")
@@ -76,29 +107,8 @@ func TestEncryptThenDecryptRoundTrip(t *testing.T) {
 	}
 
 	// The bucket holds only ciphertext: no plaintext names, no plaintext content.
-	files := 0
-	walkErr := filepath.WalkDir(bucket, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			t.Fatal(err)
-		}
-		rel, _ := filepath.Rel(filepath.Join(bucket, "my-laptop-2"), path)
-		for _, plain := range []string{"claude-code", "projects", "proj-a", "session-1"} {
-			if strings.Contains(rel, plain) {
-				t.Errorf("bucket path %q contains the plaintext name %q", rel, plain)
-			}
-		}
-		if !d.IsDir() {
-			files++
-			b, _ := os.ReadFile(path)
-			if strings.Contains(string(b), "recognisable plaintext marker") {
-				t.Errorf("bucket file %q holds plaintext", rel)
-			}
-		}
-		return nil
-	})
-	if walkErr != nil {
-		t.Fatal(walkErr)
-	}
+	files := assertOnlyCiphertext(t, bucket, "my-laptop-2",
+		[]string{"claude-code", "projects", "proj-a", "session-1"}, "recognisable plaintext marker")
 	if files != 1 {
 		t.Errorf("bucket holds %d files, want 1", files)
 	}
@@ -118,6 +128,26 @@ func TestCopyReportsAMissingSourceAsFailure(t *testing.T) {
 	res := realRunner(t, confPath).Copy(context.Background(), filepath.Join(dir, "no-such-dir"), filepath.Join(dir, "dst"))
 	if res.Outcome != Failure || res.ExitCode != 3 || !strings.Contains(res.Output, "directory not found") {
 		t.Errorf("Copy = %+v, want Failure, exit 3, 'directory not found'", res)
+	}
+}
+
+func TestListFileVersionsListsEveryFileUnderPath(t *testing.T) {
+	dir := t.TempDir()
+	confPath, bucket := writeCryptConf(t, realRunner(t, "/unused"), dir, "workstation", "placeholder-password")
+	writeFile(t, filepath.Join(dir, "src", "proj-a", "s1.jsonl"), "one\n")
+	writeFile(t, filepath.Join(dir, "src", "proj-b", "s2.jsonl"), "two\n")
+	if res := realRunner(t, confPath).Copy(context.Background(), filepath.Join(dir, "src"), "crypt-workstation:"); res.Outcome != Success {
+		t.Fatalf("Copy = %+v", res)
+	}
+
+	// The underlying storage holds the encrypted objects, one per source file; the names are
+	// not the plaintext names, so only the count is checked here.
+	got, err := realRunner(t, confPath).ListFileVersions(context.Background(), bucket+"/workstation")
+	if err != nil {
+		t.Fatalf("ListFileVersions = %v", err)
+	}
+	if len(got) != 2 {
+		t.Errorf("ListFileVersions = %v, want 2 entries", got)
 	}
 }
 

@@ -10,6 +10,10 @@ import (
 
 // cmdStatus reads only non-secret state, so it does not need the configuration.
 func cmdStatus(e env, args []string) int {
+	if len(args) != 0 {
+		_, _ = fmt.Fprintln(e.stderr, "usage: agent-downlink status")
+		return 2
+	}
 	paths := config.PathsFor(e.home)
 	f, err := status.Load(paths.StatusFile)
 	if err != nil {

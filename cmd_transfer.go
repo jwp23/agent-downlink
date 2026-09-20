@@ -14,20 +14,24 @@ import (
 )
 
 func cmdRun(e env, args []string) int {
-	return runCycle(e, "run", true, (*transfer.Cycle).Run)
+	return runCycle(e, "run", args, true, (*transfer.Cycle).Run)
 }
 
 func cmdPush(e env, args []string) int {
-	return runCycle(e, "push", false, (*transfer.Cycle).Push)
+	return runCycle(e, "push", args, false, (*transfer.Cycle).Push)
 }
 
 func cmdPull(e env, args []string) int {
-	return runCycle(e, "pull", false, (*transfer.Cycle).Pull)
+	return runCycle(e, "pull", args, false, (*transfer.Cycle).Pull)
 }
 
 // runCycle is everything the three transfer commands share. quietWhenBusy is for the timer:
 // an hourly run that overlaps a long one is normal and says nothing.
-func runCycle(e env, name string, quietWhenBusy bool, steps func(*transfer.Cycle, context.Context) bool) int {
+func runCycle(e env, name string, args []string, quietWhenBusy bool, steps func(*transfer.Cycle, context.Context) bool) int {
+	if len(args) != 0 {
+		_, _ = fmt.Fprintf(e.stderr, "usage: agent-downlink %s\n", name)
+		return 2
+	}
 	paths := config.PathsFor(e.home)
 	errors := io.Discard
 	if e.interactive {
@@ -56,6 +60,7 @@ func runCycle(e env, name string, quietWhenBusy bool, steps func(*transfer.Cycle
 	}
 	defer release()
 
+	recordStartupSuccess(paths)
 	if !steps(cycle, context.Background()) {
 		return 1
 	}
@@ -72,6 +77,21 @@ func recordStartupFailure(paths config.Paths, err error) {
 		st.Record("startup", now, false, err.Error())
 		_ = st.Save(paths.StatusFile)
 	}
+}
+
+// recordStartupSuccess clears an earlier startup failure once loading the configuration and
+// taking the lock has succeeded, so a person running `agent-downlink status` after fixing the
+// problem sees it resolved rather than stuck on the last failure.
+func recordStartupSuccess(paths config.Paths) {
+	st, err := status.Load(paths.StatusFile)
+	if err != nil {
+		return
+	}
+	if _, recorded := st.Steps["startup"]; !recorded {
+		return
+	}
+	st.Record("startup", time.Now(), true, "")
+	_ = st.Save(paths.StatusFile)
 }
 
 func loadCycle(home string, paths config.Paths, errors io.Writer) (*transfer.Cycle, error) {

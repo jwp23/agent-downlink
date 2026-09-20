@@ -32,6 +32,16 @@ func TestStatusCommandReportsRecordedSteps(t *testing.T) {
 	}
 }
 
+func TestStatusCommandRejectsExtraArgs(t *testing.T) {
+	e, _, stderr := testEnv(t)
+	if got := dispatch(e, []string{"status", "extra"}); got != 2 {
+		t.Errorf("exit status = %d, want 2", got)
+	}
+	if !strings.Contains(stderr.String(), "usage: agent-downlink status") {
+		t.Errorf("stderr = %q", stderr.String())
+	}
+}
+
 func TestStatusCommandBeforeAnyRun(t *testing.T) {
 	e, stdout, _ := testEnv(t)
 	if got := dispatch(e, []string{"status"}); got != 0 {

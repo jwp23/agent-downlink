@@ -144,6 +144,45 @@ func TestRefusesToRunOnLoosePermissions(t *testing.T) {
 	}
 }
 
+func TestStartupFailureClearsAfterRecovery(t *testing.T) {
+	ws, _, wsErr := configuredEnv(t, "workstation", filepath.Join(t.TempDir(), "bucket"))
+	writeRecord(t, ws.home, "proj-a/s1.jsonl", "from workstation\n")
+	paths := config.PathsFor(ws.home)
+	if err := os.Chmod(paths.RcloneConf, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := dispatch(ws, []string{"push"}); got != 1 {
+		t.Fatalf("push with loose permissions: exit %d, want 1", got)
+	}
+	st, _ := status.Load(paths.StatusFile)
+	if st.Steps["startup"].Error == "" {
+		t.Fatal("startup failure was not recorded")
+	}
+
+	if err := os.Chmod(paths.RcloneConf, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := dispatch(ws, []string{"push"}); got != 0 {
+		t.Fatalf("push after fixing permissions: exit %d, stderr %q", got, wsErr())
+	}
+	st, _ = status.Load(paths.StatusFile)
+	if st.Steps["startup"].Error != "" {
+		t.Errorf("status = %+v, want the startup failure cleared after recovery", st.Steps)
+	}
+}
+
+func TestTransferCommandsRejectExtraArgs(t *testing.T) {
+	for _, cmd := range []string{"run", "push", "pull"} {
+		e, _, stderr := testEnv(t)
+		if got := dispatch(e, []string{cmd, "extra"}); got != 2 {
+			t.Errorf("%s: exit status = %d, want 2", cmd, got)
+		}
+		if want := "usage: agent-downlink " + cmd; !strings.Contains(stderr.String(), want) {
+			t.Errorf("%s: stderr = %q, want %q", cmd, stderr.String(), want)
+		}
+	}
+}
+
 func TestUnconfiguredMachinePointsAtSetup(t *testing.T) {
 	e, _, stderr := testEnv(t)
 	if got := dispatch(e, []string{"run"}); got != 1 {

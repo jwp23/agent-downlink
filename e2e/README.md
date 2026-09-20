@@ -5,7 +5,7 @@ directory standing in for one. It proves:
 
 - A no-delete key can push.
 - Overwriting a file preserves the prior version (B2 buckets keep versions).
-- A file that is still being appended to when a push runs is completed by the next run.
+- Content appended to a file between two runs is fully copied by the next run.
 - A second machine can pull the first machine's pushed files and decrypt them.
 
 It also settles two open questions:

@@ -20,23 +20,15 @@ letters, digits, and hyphens — `workstation` and `laptop` are used as examples
 1. In the B2 web console, create a new bucket and set it private. B2 buckets keep every
    superseded version of a file by default; nothing further is needed to turn that on.
 2. Set a lifecycle rule so a superseded version is eventually deleted rather than kept forever
-   (ADR-002 calls for keeping it 90 days). This can be done with rclone itself, using your
-   account's master application key — the per-machine key from step 2 below is deliberately too
-   restricted to change a bucket's settings:
+   (ADR-002 calls for keeping it 90 days). Set this in the B2 web console's lifecycle settings
+   for the bucket, not with `rclone backend lifecycle`: that command takes the account's master
+   application key on its command line, and another local account on your machine can read a
+   process's arguments. The per-machine key from step 2 below is deliberately too restricted to
+   change a bucket's settings, so it cannot be used here instead.
 
-   ```sh
-   rclone backend lifecycle ":b2,account=<key ID>,key=<application key>:<bucket>" -o daysFromHidingToDeleting=90
-   ```
-
-   Verified against: `rclone help backend b2` (the `lifecycle` backend command), and the
-   `:backend,param=value:path` on-the-fly remote syntax, confirmed in this environment against
-   `rclone v1.75.1` (`rclone backend lifecycle ":b2,account=...,key=...:bucket"` reaches B2's
-   authentication step rather than failing to parse).
-
-   B2 hides a file's previous version the moment it is overwritten; `daysFromHidingToDeleting`
-   is what eventually expires a hidden version. It worked if re-running the same command with no
-   `-o` flag prints `"daysFromHidingToDeleting": 90` (per `rclone help backend b2`: omitting
-   `-o` reads back the current rules).
+   B2 hides a file's previous version the moment it is overwritten; the "days from hiding to
+   deleting" setting is what eventually expires a hidden version. Confirm it took effect by
+   reopening the bucket's lifecycle settings and checking the value shown.
 
 ## 2. Create a machine's storage key
 

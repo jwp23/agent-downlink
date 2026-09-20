@@ -21,6 +21,10 @@ const Label = "com.github.jwp23.agent-downlink"
 const (
 	serviceName = "agent-downlink.service"
 	timerName   = "agent-downlink.timer"
+
+	// userFlag scopes every systemctl call to the invoking user's own instance, never the
+	// system-wide one.
+	userFlag = "--user"
 )
 
 // SystemdService is the unit the timer starts.
@@ -149,10 +153,10 @@ func (s *Scheduler) Install() error {
 		if err := writeFile(filepath.Join(s.unitDir(), timerName), SystemdTimer()); err != nil {
 			return err
 		}
-		if err := s.Exec("systemctl", "--user", "daemon-reload"); err != nil {
+		if err := s.Exec("systemctl", userFlag, "daemon-reload"); err != nil {
 			return err
 		}
-		return s.Exec("systemctl", "--user", "enable", "--now", timerName)
+		return s.Exec("systemctl", userFlag, "enable", "--now", timerName)
 	case "darwin":
 		if err := writeFile(s.plistPath(), LaunchdPlist(s.Binary)); err != nil {
 			return err
@@ -180,7 +184,7 @@ func (s *Scheduler) Remove() error {
 				return err
 			}
 		}
-		return s.Exec("systemctl", "--user", "daemon-reload")
+		return s.Exec("systemctl", userFlag, "daemon-reload")
 	case "darwin":
 		_ = s.Exec("launchctl", "bootout", s.launchdService()) // fails when not loaded; nothing to do then
 		return removeIfPresent(s.plistPath())
@@ -197,7 +201,7 @@ func (s *Scheduler) unsupported() error {
 // never heard of as "does not exist", which is not a failure here: there is nothing to stop.
 // Any other error is real and is returned.
 func (s *Scheduler) disableTimer() error {
-	err := s.Exec("systemctl", "--user", "disable", "--now", timerName)
+	err := s.Exec("systemctl", userFlag, "disable", "--now", timerName)
 	if err != nil && !strings.Contains(err.Error(), "does not exist") {
 		return err
 	}

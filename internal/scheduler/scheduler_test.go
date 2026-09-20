@@ -21,8 +21,12 @@ func expected(t *testing.T, name string) string {
 }
 
 func TestGeneratedFilesMatchTheExpectedFiles(t *testing.T) {
+	service, err := SystemdService(testBinary)
+	if err != nil {
+		t.Fatal(err)
+	}
 	cases := map[string]string{
-		"agent-downlink.service": SystemdService(testBinary),
+		"agent-downlink.service": service,
 		"agent-downlink.timer":   SystemdTimer(),
 		Label + ".plist":         LaunchdPlist(testBinary),
 	}
@@ -41,9 +45,24 @@ func TestPlistEscapesTheBinaryPath(t *testing.T) {
 }
 
 func TestSystemdServiceQuotesTheBinaryPath(t *testing.T) {
-	got := SystemdService(`/home/u/R&D "tools"/agent-downlink`)
+	got, err := SystemdService(`/home/u/R&D "tools"/agent-downlink`)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !strings.Contains(got, `ExecStart="/home/u/R&D \"tools\"/agent-downlink" run`) {
 		t.Errorf("service unit does not quote a path with whitespace and quotes:\n%s", got)
+	}
+}
+
+func TestSystemdServiceRejectsControlCharactersInTheBinaryPath(t *testing.T) {
+	for name, binary := range map[string]string{
+		"newline": "/usr/local/bin/agent-downlink\n[Service]\nExecStart=/bin/evil",
+		"CR":      "/usr/local/bin/agent-downlink\r",
+		"NUL":     "/usr/local/bin/agent-downlink\x00",
+	} {
+		if _, err := SystemdService(binary); err == nil {
+			t.Errorf("%s: SystemdService = nil error, want a rejection of the control character", name)
+		}
 	}
 }
 
@@ -69,7 +88,11 @@ func TestInstallAndRemoveOnLinux(t *testing.T) {
 	if err := s.Install(); err != nil {
 		t.Fatal(err)
 	}
-	for name, want := range map[string]string{"agent-downlink.service": SystemdService(testBinary), "agent-downlink.timer": SystemdTimer()} {
+	wantService, err := SystemdService(testBinary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, want := range map[string]string{"agent-downlink.service": wantService, "agent-downlink.timer": SystemdTimer()} {
 		got, err := os.ReadFile(filepath.Join(unitDir, name))
 		if err != nil || string(got) != want {
 			t.Errorf("%s = %q, %v", name, got, err)

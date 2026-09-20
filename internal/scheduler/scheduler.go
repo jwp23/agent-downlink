@@ -24,22 +24,30 @@ const (
 )
 
 // SystemdService is the unit the timer starts.
-func SystemdService(binary string) string {
+func SystemdService(binary string) (string, error) {
+	quoted, err := systemdQuote(binary)
+	if err != nil {
+		return "", err
+	}
 	return "[Unit]\n" +
 		"Description=agent-downlink: archive agent session records\n" +
 		"\n" +
 		"[Service]\n" +
 		"Type=oneshot\n" +
-		"ExecStart=" + systemdQuote(binary) + " run\n"
+		"ExecStart=" + quoted + " run\n", nil
 }
 
 // systemdQuote quotes a single ExecStart= argument per systemd.syntax(7): ExecStart= splits
 // its value into words the same way a shell would, so a binary path with whitespace needs
 // quoting, and a literal double quote or backslash inside it needs escaping. A path with none
-// of those characters is left as-is.
-func systemdQuote(s string) string {
+// of those characters is left as-is. A carriage return, line feed, or NUL is refused outright:
+// none can be escaped, and a newline could inject a new directive into the unit file.
+func systemdQuote(s string) (string, error) {
+	if strings.ContainsAny(s, "\r\n\x00") {
+		return "", fmt.Errorf("binary path %q contains a control character systemd cannot quote", s)
+	}
 	if !strings.ContainsAny(s, " \t\"\\") {
-		return s
+		return s, nil
 	}
 	var b strings.Builder
 	b.WriteByte('"')
@@ -50,7 +58,7 @@ func systemdQuote(s string) string {
 		b.WriteRune(r)
 	}
 	b.WriteByte('"')
-	return b.String()
+	return b.String(), nil
 }
 
 // SystemdTimer fires hourly. Persistent=true runs once at login for runs missed while off.
@@ -124,7 +132,11 @@ func (s *Scheduler) launchdService() string { return fmt.Sprintf("gui/%d/%s", s.
 func (s *Scheduler) Install() error {
 	switch s.GOOS {
 	case "linux":
-		if err := writeFile(filepath.Join(s.unitDir(), serviceName), SystemdService(s.Binary)); err != nil {
+		service, err := SystemdService(s.Binary)
+		if err != nil {
+			return err
+		}
+		if err := writeFile(filepath.Join(s.unitDir(), serviceName), service); err != nil {
 			return err
 		}
 		if err := writeFile(filepath.Join(s.unitDir(), timerName), SystemdTimer()); err != nil {

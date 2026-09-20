@@ -32,24 +32,44 @@ letters, digits, and hyphens — `workstation` and `laptop` are used as examples
 
 ## 2. Create a machine's storage key
 
-Each live machine's key needs list, read, and write capabilities on the bucket, and must
-**not** have delete capability (ADR-002): a compromised machine must not be able to destroy or
-rewrite the archive, only versioning-protected overwrites. ADR-002 records that a key without
-delete cannot be created in the B2 web console — only the `b2` command-line tool or the B2 API
-can create one.
+Each live machine's key needs exactly the capabilities `listFiles`, `readFiles`, and
+`writeFiles` on the bucket, and must **not** have `deleteFiles` (ADR-002): a compromised machine
+must not be able to destroy or rewrite the archive, only versioning-protected overwrites.
+ADR-002 records that a key without delete cannot be created in the B2 web console — only the
+`b2` command-line tool or the B2 API can create one.
 
-This runbook cannot give you the exact `b2` command here: the `b2` tool is not installed in the
-environment this runbook was written in, and there was no way to check its current flags against
-Backblaze's live documentation either. Before running anything, verify the exact invocation
-against `b2 create-key --help` (or whatever the installed `b2` version's key-creation command is
-called) or Backblaze's current command-line tools documentation. What the key must have when you
-create it:
+`listFiles` is not optional. Every transfer is an `rclone copy`, and rclone lists the
+destination before copying anything; B2 answers that listing from a key without `listFiles` with
+`401 unauthorized` and an empty message, which rclone reports as `Unknown 401  (401
+unauthorized)`. `listBuckets` is not needed: a key scoped to one bucket carries that bucket's
+name and ID in its authorization response, which is where rclone reads them.
 
-- Scoped to `<bucket>` only.
-- Capabilities: list, read, and write. Not delete.
+```sh
+export B2_ACCOUNT_INFO="$(mktemp -d)/account_info"
+b2 account authorize
+b2 key create --bucket <bucket> <machine> listFiles,readFiles,writeFiles
+rm -rf "$(dirname "$B2_ACCOUNT_INFO")"
+```
 
-Save the resulting key ID and application key in your password manager under `<machine>`; you
-will paste them into `agent-downlink setup` next.
+These are the `b2` tool's current noun-verb commands; 3.x releases spell them
+`b2 authorize-account` and `b2 create-key`. Confirm against what you have installed with
+`b2 version` and `b2 key create --help`.
+
+Give `b2 account authorize` nothing on the command line. It prompts for the master key ID and
+reads the key without echoing it, so neither reaches your shell history or a process's
+arguments, where another local account could read them. Creating a key needs the master key's
+`writeKeys` capability, which the machine key deliberately does not have.
+
+`b2 account authorize` caches the key it authorized with in a SQLite file, `~/.b2_account_info`
+unless `B2_ACCOUNT_INFO` says otherwise, and leaves it there. Pointing that at a fresh private
+directory and deleting the directory afterwards is what keeps the master key from resting on
+disk, the same reason section 1 sets the lifecycle rule in the web console rather than from the
+command line. Do not reach for `b2 account clear` instead: it empties the cache but does not
+remove the file (Backblaze advisory GHSA-8wr4-2wm6-w3pr).
+
+`key create` prints the key ID and the application key, the only time the key itself is ever
+shown. Save both in your password manager under `<machine>`; you will paste them into
+`agent-downlink setup` next.
 
 ## 3. Add a machine
 
@@ -77,15 +97,20 @@ On the machine that should be able to read another machine's records:
 
 ## 5. Retire a machine
 
-At the time this was written, whether a B2 application key restricted to a file-name prefix
-(`<machine>/`) works with rclone had not yet been confirmed — the end-to-end suite that answers
-this (`agent-downlink-eu4.9`) had not yet been run against a real bucket. Until an ADR records
-that a prefix-restricted key works, use the fallback: a whole-bucket key without delete,
-deleted immediately after the machine's one final push. If a later ADR confirms the
-prefix-restricted key works, prefer scoping the key to `<machine>/` instead, since it cannot
-touch any other machine's data even briefly.
+A B2 application key restricted to the file-name prefix `<machine>/` pushes correctly with
+rclone: the end-to-end suite confirmed it against a real bucket, so scope the retiring machine's
+key to its own prefix rather than to the whole bucket. Such a key cannot touch another machine's
+data even briefly, which is why ADR-002 calls for it.
 
-1. Create a storage key exactly as in section 2 (whole-bucket, list/read/write, no delete).
+1. Create a storage key as in section 2, restricted to the file-name prefix `<machine>/` as well
+   as to the bucket. The trailing slash is what confines the key to that machine's area.
+
+   ```sh
+   export B2_ACCOUNT_INFO="$(mktemp -d)/account_info"
+   b2 account authorize
+   b2 key create --bucket <bucket> --name-prefix <machine>/ <machine>-retire listFiles,readFiles,writeFiles
+   rm -rf "$(dirname "$B2_ACCOUNT_INFO")"
+   ```
 2. On the retiring machine, run `agent-downlink setup --no-timer`, giving that key and the
    machine's *existing* encryption password (so it replaces the same machine's area rather than
    starting a new one) — `setup` asks to confirm before replacing an existing configuration.

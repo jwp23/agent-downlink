@@ -239,6 +239,83 @@ func TestRerunWithYesKeepsReadersMirrorAndCustomTools(t *testing.T) {
 	}
 }
 
+func TestRerunRejectsACorruptExistingConfig(t *testing.T) {
+	home := t.TempDir()
+	if _, err := runSetup(t, home, Options{Hostname: "laptop", NoTimer: true},
+		"laptop", "scratch-bucket", "000placeholderkeyid", "K000placeholderkey", ""); err != nil {
+		t.Fatal(err)
+	}
+	paths := config.PathsFor(home)
+	before, _ := os.ReadFile(paths.RcloneConf)
+	if err := os.WriteFile(paths.ConfigFile, []byte("not valid toml [[["), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := runSetup(t, home, Options{Hostname: "laptop", NoTimer: true},
+		"yes", "laptop", "new-bucket", "000newkeyid", "K000newkey", ""); err == nil {
+		t.Error("Run = nil error, want the config.toml parse error surfaced rather than silently reset")
+	}
+	after, _ := os.ReadFile(paths.RcloneConf)
+	if !bytes.Equal(before, after) {
+		t.Error("rclone.conf changed although config.toml could not be read")
+	}
+}
+
+func TestRerunRejectsACorruptExistingRcloneConf(t *testing.T) {
+	home := t.TempDir()
+	if _, err := runSetup(t, home, Options{Hostname: "laptop", NoTimer: true},
+		"laptop", "scratch-bucket", "000placeholderkeyid", "K000placeholderkey", ""); err != nil {
+		t.Fatal(err)
+	}
+	paths := config.PathsFor(home)
+	if err := os.WriteFile(paths.RcloneConf, []byte("not a valid rclone.conf [[["), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := runSetup(t, home, Options{Hostname: "laptop", NoTimer: true},
+		"yes", "laptop", "new-bucket", "000newkeyid", "K000newkey", ""); err == nil {
+		t.Error("Run = nil error, want the rclone.conf parse error surfaced rather than silently reset")
+	}
+}
+
+func TestReplaceConfigPairRestoresOldConfigWhenSecretsSaveFails(t *testing.T) {
+	home := t.TempDir()
+	paths := config.PathsFor(home)
+	oldCfg := config.File{Machine: "workstation", Storage: "b2:old-bucket", Mirror: paths.DefaultMirror, Tools: []string{"claude-code"}}
+	if err := oldCfg.Save(paths.ConfigFile); err != nil {
+		t.Fatal(err)
+	}
+	// A directory in rclone.conf's place makes RcloneConf.Save's rename fail.
+	if err := os.MkdirAll(paths.RcloneConf, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	newCfg := config.File{Machine: "laptop", Storage: "b2:new-bucket", Mirror: paths.DefaultMirror, Tools: []string{"claude-code"}}
+	if err := replaceConfigPair(paths, newCfg, config.RcloneConf{Passwords: map[string]string{}}); err == nil {
+		t.Fatal("replaceConfigPair = nil error, want the rclone.conf write failure")
+	}
+	got, err := config.Load(paths.ConfigFile)
+	if err != nil || got.Machine != "workstation" || got.Storage != "b2:old-bucket" {
+		t.Errorf("config.toml after a failed replace = %+v, %v; want the previous config restored", got, err)
+	}
+}
+
+func TestReplaceConfigPairRemovesNewConfigWhenNoPreviousExisted(t *testing.T) {
+	home := t.TempDir()
+	paths := config.PathsFor(home)
+	if err := os.MkdirAll(paths.RcloneConf, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	newCfg := config.File{Machine: "laptop", Storage: "b2:new-bucket", Mirror: paths.DefaultMirror, Tools: []string{"claude-code"}}
+	if err := replaceConfigPair(paths, newCfg, config.RcloneConf{Passwords: map[string]string{}}); err == nil {
+		t.Fatal("replaceConfigPair = nil error, want the rclone.conf write failure")
+	}
+	if _, err := os.Stat(paths.ConfigFile); !os.IsNotExist(err) {
+		t.Errorf("config.toml exists after a failed first-time setup (err = %v); want it removed", err)
+	}
+}
+
 func TestInputEndingEarlyIsAnError(t *testing.T) {
 	home := t.TempDir()
 	var out bytes.Buffer

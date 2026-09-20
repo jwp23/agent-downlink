@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"strings"
 
@@ -55,15 +56,51 @@ func Run(ctx context.Context, p *Prompter, o Options) error {
 		return err
 	}
 
-	if err := cfg.Save(paths.ConfigFile); err != nil {
-		return err
-	}
-	if err := secrets.Save(paths.RcloneConf, cfg.Storage); err != nil {
+	if err := replaceConfigPair(paths, cfg, secrets); err != nil {
 		return err
 	}
 
 	report(p, paths, cfg.Machine, password, generated)
 	return installSchedule(p, o)
+}
+
+// replaceConfigPair writes both configuration files. If rclone.conf fails to save after
+// config.toml already has, config.toml is rolled back, so a later command never sees
+// config.toml naming a new machine or storage while rclone.conf still holds the previous
+// one's credentials.
+func replaceConfigPair(paths config.Paths, cfg config.File, secrets config.RcloneConf) error {
+	previous, hadPrevious, err := readIfExists(paths.ConfigFile)
+	if err != nil {
+		return err
+	}
+	if err := cfg.Save(paths.ConfigFile); err != nil {
+		return err
+	}
+	if err := secrets.Save(paths.RcloneConf, cfg.Storage); err != nil {
+		if restoreErr := restorePrevious(paths.ConfigFile, previous, hadPrevious); restoreErr != nil {
+			return fmt.Errorf("%w (and the previous config.toml could not be restored: %v)", err, restoreErr)
+		}
+		return err
+	}
+	return nil
+}
+
+func readIfExists(path string) (data []byte, existed bool, err error) {
+	b, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	return b, true, nil
+}
+
+func restorePrevious(path string, data []byte, existed bool) error {
+	if !existed {
+		return os.Remove(path)
+	}
+	return os.WriteFile(path, data, 0o600)
 }
 
 // carriedOver is the configuration the answers are filled into: the defaults on a fresh
@@ -81,10 +118,18 @@ func carriedOver(p *Prompter, paths config.Paths) (config.File, config.RcloneCon
 	if err := confirmReplacement(p, "Replace them?"); err != nil {
 		return cfg, secrets, err
 	}
-	if old, err := config.Load(paths.ConfigFile); err == nil {
+	if old, err := config.Load(paths.ConfigFile); err != nil {
+		if !errors.Is(err, fs.ErrNotExist) {
+			return cfg, secrets, err
+		}
+	} else {
 		cfg.Mirror, cfg.Tools, cfg.CustomTools = old.Mirror, old.Tools, old.CustomTools
 	}
-	if old, err := config.LoadRcloneConf(paths.RcloneConf); err == nil {
+	if old, err := config.LoadRcloneConf(paths.RcloneConf); err != nil {
+		if !errors.Is(err, fs.ErrNotExist) {
+			return cfg, secrets, err
+		}
+	} else {
 		secrets.Passwords = old.Passwords
 	}
 	return cfg, secrets, nil

@@ -54,7 +54,11 @@ func (f File) Validate() error {
 	if f.Storage == "" {
 		return fmt.Errorf("storage is empty; it should be b2:<bucket-name>")
 	}
-	if !strings.HasPrefix(f.Storage, storageRemote+":") && !filepath.IsAbs(f.Storage) {
+	if strings.HasPrefix(f.Storage, storageRemote+":") {
+		if strings.TrimPrefix(f.Storage, storageRemote+":") == "" {
+			return fmt.Errorf("storage is missing a bucket name; it should be b2:<bucket-name>")
+		}
+	} else if !filepath.IsAbs(f.Storage) {
 		return fmt.Errorf("storage must be b2:<bucket-name> or an absolute path, got %q", f.Storage)
 	}
 	if !filepath.IsAbs(f.Mirror) {
@@ -115,8 +119,23 @@ func (f File) Save(path string) error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
-	return os.WriteFile(path, b, 0o600)
+	// Written to a temporary file and renamed into place, so a write error or the process
+	// dying mid-write never truncates or corrupts an existing config.toml.
+	tmp, err := os.CreateTemp(dir, ".config.toml-*") // CreateTemp makes the file 0600
+	if err != nil {
+		return err
+	}
+	defer func() { _ = os.Remove(tmp.Name()) }() // a no-op once the rename has happened
+	if _, err := tmp.Write(b); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), path)
 }

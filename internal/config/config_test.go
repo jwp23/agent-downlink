@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -47,6 +48,36 @@ func TestSaveCreatesPrivateDirectoryAndFile(t *testing.T) {
 		if got := info.Mode().Perm(); got != want {
 			t.Errorf("%s mode = %04o, want %04o", p, got, want)
 		}
+	}
+}
+
+func TestSaveLeavesTheExistingFileUntouchedWhenItCannotBeReplaced(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("this test makes a directory read-only, which root ignores")
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	if err := validFile().Save(path); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+
+	other := validFile()
+	other.Machine = "laptop"
+	if err := other.Save(path); err == nil {
+		t.Fatal("Save = nil error, want it to fail because the directory cannot be written to")
+	}
+	after, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(before, after) {
+		t.Errorf("existing config.toml changed after a failed save: %q, now %q, %v", before, after, err)
 	}
 }
 
@@ -98,6 +129,7 @@ func TestValidate(t *testing.T) {
 		"bad machine":            {func(f *File) { f.Machine = "Work Station" }, "lowercase letters, digits, and hyphens"},
 		"empty storage":          {func(f *File) { f.Storage = "" }, "storage"},
 		"relative storage":       {func(f *File) { f.Storage = "scratch-bucket" }, "storage"},
+		"storage with no bucket": {func(f *File) { f.Storage = "b2:" }, "bucket name"},
 		"relative mirror":        {func(f *File) { f.Mirror = "mirror" }, "mirror must be an absolute path"},
 		"relative rclone":        {func(f *File) { f.Rclone = "rclone" }, "rclone must be an absolute path"},
 		"unknown tool":           {func(f *File) { f.Tools = []string{"nonesuch"} }, `unknown tool "nonesuch"`},

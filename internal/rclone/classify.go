@@ -50,8 +50,26 @@ type logLine struct {
 // exit status of its own for "a source file changed", so the error lines decide: if every one
 // of them is about a changing source file, the copy only needs repeating.
 func classify(exitCode int, stderr []byte) Result {
-	var out []string
-	errorLines, changingLines := 0, 0
+	out, errorLines, changingLines := scanRcloneLog(stderr)
+
+	result := Result{ExitCode: exitCode, Output: strings.Join(out, "\n")}
+	switch {
+	case exitCode == 0:
+		result.Outcome = Success
+	case errorLines > 0 && errorLines == changingLines:
+		result.Outcome = Warning
+	default:
+		result.Outcome = Failure
+		if result.Output == "" {
+			result.Output = fmt.Sprintf("rclone exited with status %d", exitCode)
+		}
+	}
+	return result
+}
+
+// scanRcloneLog reads rclone's --use-json-log stderr, one line per rendered message, and
+// counts how many were error-level and how many of those were about a changing source file.
+func scanRcloneLog(stderr []byte) (out []string, errorLines, changingLines int) {
 	scanner := bufio.NewScanner(bytes.NewReader(stderr))
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for scanner.Scan() {
@@ -76,18 +94,5 @@ func classify(exitCode int, stderr []byte) Result {
 		}
 		out = append(out, rendered+line.Msg)
 	}
-
-	result := Result{ExitCode: exitCode, Output: strings.Join(out, "\n")}
-	switch {
-	case exitCode == 0:
-		result.Outcome = Success
-	case errorLines > 0 && errorLines == changingLines:
-		result.Outcome = Warning
-	default:
-		result.Outcome = Failure
-		if result.Output == "" {
-			result.Output = fmt.Sprintf("rclone exited with status %d", exitCode)
-		}
-	}
-	return result
+	return out, errorLines, changingLines
 }

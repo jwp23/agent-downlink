@@ -51,15 +51,8 @@ func (f File) Validate() error {
 	if err := ValidateMachineName(f.Machine); err != nil {
 		return err
 	}
-	if f.Storage == "" {
-		return fmt.Errorf("storage is empty; it should be b2:<bucket-name>")
-	}
-	if strings.HasPrefix(f.Storage, storageRemote+":") {
-		if strings.TrimPrefix(f.Storage, storageRemote+":") == "" {
-			return fmt.Errorf("storage is missing a bucket name; it should be b2:<bucket-name>")
-		}
-	} else if !filepath.IsAbs(f.Storage) {
-		return fmt.Errorf("storage must be b2:<bucket-name> or an absolute path, got %q", f.Storage)
+	if err := validateStorage(f.Storage); err != nil {
+		return err
 	}
 	if !filepath.IsAbs(f.Mirror) {
 		return fmt.Errorf("mirror must be an absolute path, got %q", f.Mirror)
@@ -67,8 +60,31 @@ func (f File) Validate() error {
 	if f.Rclone != "" && !filepath.IsAbs(f.Rclone) {
 		return fmt.Errorf("rclone must be an absolute path or empty, got %q", f.Rclone)
 	}
+	return validateToolNames(f.Tools, f.CustomTools)
+}
+
+// validateStorage checks that storage is either b2:<bucket-name> or an absolute local path.
+func validateStorage(storage string) error {
+	if storage == "" {
+		return fmt.Errorf("storage is empty; it should be b2:<bucket-name>")
+	}
+	if strings.HasPrefix(storage, storageRemote+":") {
+		if strings.TrimPrefix(storage, storageRemote+":") == "" {
+			return fmt.Errorf("storage is missing a bucket name; it should be b2:<bucket-name>")
+		}
+		return nil
+	}
+	if !filepath.IsAbs(storage) {
+		return fmt.Errorf("storage must be b2:<bucket-name> or an absolute path, got %q", storage)
+	}
+	return nil
+}
+
+// validateToolNames validates every built-in and custom tool name and rejects a name used
+// twice, whether by two built-ins, two custom tools, or one of each.
+func validateToolNames(tools []string, customTools []CustomTool) error {
 	names := map[string]bool{}
-	for _, name := range f.Tools {
+	for _, name := range tools {
 		if _, ok := builtinTools[name]; !ok {
 			return fmt.Errorf("unknown tool %q; built-in tools are %v", name, BuiltinToolNames())
 		}
@@ -77,7 +93,7 @@ func (f File) Validate() error {
 		}
 		names[name] = true
 	}
-	for _, c := range f.CustomTools {
+	for _, c := range customTools {
 		if err := c.validate(); err != nil {
 			return err
 		}

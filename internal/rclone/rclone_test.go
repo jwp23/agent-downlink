@@ -170,14 +170,14 @@ func TestCopySkipsSymlinksQuietly(t *testing.T) {
 // TestSecretsNeverReachAProcessArgument runs real rclone through a wrapper that records every
 // argument it is started with. Other users on a machine can read process arguments.
 func TestSecretsNeverReachAProcessArgument(t *testing.T) {
-	real, err := exec.LookPath("rclone")
+	rcloneBinary, err := exec.LookPath("rclone")
 	if err != nil {
 		t.Fatalf("integration tests need rclone: %v", err)
 	}
 	dir := t.TempDir()
 	argLog := filepath.Join(dir, "args.log")
 	wrapper := filepath.Join(dir, "rclone-recording-args")
-	script := fmt.Sprintf("#!/bin/sh\nprintf '%%s\\n' \"$@\" >> %q\nexec %q \"$@\"\n", argLog, real)
+	script := fmt.Sprintf("#!/bin/sh\nprintf '%%s\\n' \"$@\" >> %q\nexec %q \"$@\"\n", argLog, rcloneBinary)
 	if err := os.WriteFile(wrapper, []byte(script), 0o700); err != nil {
 		t.Fatal(err)
 	}

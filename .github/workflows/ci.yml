@@ -73,7 +73,15 @@ jobs:
 
       - name: Install rclone (Linux)
         if: runner.os == 'Linux'
-        run: curl -fsSL https://rclone.org/install.sh | sudo bash
+        run: |
+          set -euo pipefail
+          version=$(curl -fsS --proto '=https' --tlsv1.2 https://downloads.rclone.org/version.txt | awk '{print $2}')
+          zip="rclone-${version}-linux-amd64.zip"
+          curl -fsSO --proto '=https' --tlsv1.2 "https://downloads.rclone.org/${version}/${zip}"
+          curl -fsSO --proto '=https' --tlsv1.2 "https://downloads.rclone.org/${version}/SHA256SUMS"
+          sha256sum --ignore-missing -c SHA256SUMS
+          unzip -q "$zip"
+          sudo install -m 755 "rclone-${version}-linux-amd64/rclone" /usr/local/bin/rclone
 
       - name: Install rclone (macOS)
         if: runner.os == 'macOS'

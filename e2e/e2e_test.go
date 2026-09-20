@@ -184,19 +184,34 @@ func TestAnAppendedFileIsCompletedAndTheOverwriteKeepsThePriorVersion(t *testing
 }
 
 // TestPrefixRestrictedKeyCanPush settles an open question from the epic. A failure here is a
-// finding, not a defect in the tool: record it as the test's message directs.
+// finding, not a defect in the tool: record it as the test's message directs. The unrestricted
+// key pushes the same area first, so that a failure the prefix restriction did not cause — a
+// key missing a capability, say — fails the test as a broken environment instead of as a
+// finding about prefixes.
 func TestPrefixRestrictedKeyCanPush(t *testing.T) {
 	ctx := context.Background()
 	bucket := requireEnv(t, "AGENT_DOWNLINK_E2E_BUCKET")
 	name := requireEnv(t, "AGENT_DOWNLINK_E2E_PREFIX")
-	key := config.B2{Account: requireEnv(t, "AGENT_DOWNLINK_E2E_PREFIX_KEY_ID"), Key: requireEnv(t, "AGENT_DOWNLINK_E2E_PREFIX_KEY")}
-	m := newMachine(t, name, bucket, key, map[string]string{name: "placeholder-password-prefix"})
-	m.write(t, fmt.Sprintf("proj/%d.jsonl", time.Now().Unix()), "pushed with a prefix-restricted key\n", false)
+	password := map[string]string{name: "placeholder-password-prefix"}
 
+	unrestricted := config.B2{Account: requireEnv(t, "AGENT_DOWNLINK_E2E_KEY_ID"), Key: requireEnv(t, "AGENT_DOWNLINK_E2E_KEY")}
+	control := newMachine(t, name, bucket, unrestricted, password)
+	control.write(t, fmt.Sprintf("proj/control-%d.jsonl", time.Now().Unix()), "pushed with the unrestricted key\n", false)
+	if !control.cycle.Push(ctx) {
+		log, _ := os.ReadFile(control.paths.LogFile)
+		t.Fatalf("the unrestricted key could not push to this area either, so this run says nothing about "+
+			"prefix restriction. Fix the suite's environment first; a key needs the capabilities listFiles, "+
+			"readFiles, and writeFiles.\nlog:\n%s", log)
+	}
+
+	key := config.B2{Account: requireEnv(t, "AGENT_DOWNLINK_E2E_PREFIX_KEY_ID"), Key: requireEnv(t, "AGENT_DOWNLINK_E2E_PREFIX_KEY")}
+	m := newMachine(t, name, bucket, key, password)
+	m.write(t, fmt.Sprintf("proj/%d.jsonl", time.Now().Unix()), "pushed with a prefix-restricted key\n", false)
 	if !m.cycle.Push(ctx) {
 		log, _ := os.ReadFile(m.paths.LogFile)
-		t.Fatalf("rclone could not push with a key restricted to the prefix %q. Use the fallback from the epic "+
-			"(a whole-bucket no-delete key, deleted after the retiring machine's one push) and record it in a new ADR "+
-			"that supersedes that clause of ADR-002.\nlog:\n%s", name+"/", log)
+		t.Fatalf("rclone could not push with a key restricted to the prefix %q, though the unrestricted key "+
+			"pushed the same area. Use the fallback from the epic (a whole-bucket no-delete key, deleted after "+
+			"the retiring machine's one push) and record it in a new ADR that supersedes that clause of "+
+			"ADR-002.\nlog:\n%s", name+"/", log)
 	}
 }

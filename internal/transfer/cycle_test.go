@@ -305,12 +305,15 @@ func TestAFailedPushDoesNotPreventPull(t *testing.T) {
 
 func TestOneFailedPullDoesNotBlockTheOthers(t *testing.T) {
 	ctx := context.Background()
-	// old-desktop sorts between laptop and workstation and has never pushed.
-	_, ms := newMachines(t, []string{"workstation", "laptop"}, "old-desktop")
-	ws, lt := ms["workstation"], ms["laptop"]
+	// old-desktop sorts between laptop and tablet and has never pushed, so the pull that comes
+	// after it (tablet) is the one that proves a failure does not stop the loop.
+	_, ms := newMachines(t, []string{"workstation", "laptop", "tablet"}, "old-desktop")
+	ws, lt, tb := ms["workstation"], ms["laptop"], ms["tablet"]
 	write(t, filepath.Join(ws.claude, "projects", "proj-a", "s1.jsonl"), "from workstation\n")
 	write(t, filepath.Join(lt.claude, "projects", "proj-b", "s2.jsonl"), "from laptop\n")
+	write(t, filepath.Join(tb.claude, "projects", "proj-c", "s3.jsonl"), "from tablet\n")
 	mustSucceed(t, lt, lt.cycle.Push(ctx))
+	mustSucceed(t, tb, tb.cycle.Push(ctx))
 
 	if ws.cycle.Run(ctx) {
 		t.Error("Run reported success although one pull failed")
@@ -321,6 +324,9 @@ func TestOneFailedPullDoesNotBlockTheOthers(t *testing.T) {
 	}
 	if s := st.Steps["pull:laptop"]; s.Error != "" || s.LastSuccess.IsZero() {
 		t.Errorf("pull:laptop = %+v; want success", s)
+	}
+	if s := st.Steps["pull:tablet"]; s.Error != "" || s.LastSuccess.IsZero() {
+		t.Errorf("pull:tablet = %+v; want success even though it is pulled after the failure", s)
 	}
 	if !strings.Contains(ws.errors.String(), "pull:old-desktop FAILED") {
 		t.Errorf("errors = %q", ws.errors.String())
@@ -387,6 +393,56 @@ func TestAWarningCountsAsSuccessAndIsLoggedWithItsDetail(t *testing.T) {
 	}
 	if ws.errors.Len() != 0 {
 		t.Errorf("a warning was shown as an error: %q", ws.errors.String())
+	}
+}
+
+func TestPullTightensAnExistingLooseMirror(t *testing.T) {
+	dir := t.TempDir()
+	mirror := filepath.Join(dir, "mirror")
+	if err := os.MkdirAll(mirror, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runner, err := rclone.New("", filepath.Join(dir, "rclone.conf"))
+	if err != nil {
+		t.Fatalf("integration tests need rclone: %v", err)
+	}
+	c := &Cycle{
+		Machine:    "workstation",
+		Mirror:     mirror,
+		Readable:   []string{"laptop"},
+		Runner:     runner,
+		StatusPath: filepath.Join(dir, "status.json"),
+		Log:        runlog.New(filepath.Join(dir, "run.log")),
+		Now:        time.Now,
+		Errors:     io.Discard,
+	}
+	c.Pull(context.Background()) // laptop has never pushed, so the pull itself fails; the mirror is still tightened first
+	info, err := os.Stat(mirror)
+	if err != nil || info.Mode().Perm() != 0o700 {
+		t.Errorf("mirror mode = %v, %v; want 0700", info.Mode().Perm(), err)
+	}
+}
+
+func TestLocalCopyTightensAnExistingLooseMirror(t *testing.T) {
+	dir := t.TempDir()
+	mirror := filepath.Join(dir, "mirror")
+	if err := os.MkdirAll(mirror, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	c := &Cycle{
+		Machine:    "workstation",
+		Mirror:     mirror,
+		StatusPath: filepath.Join(dir, "status.json"),
+		Log:        runlog.New(filepath.Join(dir, "run.log")),
+		Now:        time.Now,
+		Errors:     io.Discard,
+	}
+	if !c.localCopy(context.Background()) {
+		t.Fatal("localCopy failed")
+	}
+	info, err := os.Stat(mirror)
+	if err != nil || info.Mode().Perm() != 0o700 {
+		t.Errorf("mirror mode = %v, %v; want 0700", info.Mode().Perm(), err)
 	}
 }
 

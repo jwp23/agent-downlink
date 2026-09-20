@@ -1,0 +1,1 @@
+{"time":"2026-09-18T19:04:29.594643029-07:00","level":"critical","msg":"Failed to create file system for \"crypt-workstation:\": failed to make remote \"b2:scratch-bucket/workstation\" to wrap: failed to authorize account: failed to authenticate: Get \"http://127.0.0.1:1/b2api/v4/b2_authorize_account\": dial tcp 127.0.0.1:1: connect: connection refused","source":"cmd/cmd.go:148"}

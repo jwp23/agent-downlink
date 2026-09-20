@@ -80,8 +80,17 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 
 ## Build & Test
 
-The Go module does not exist yet. The feature that creates it (`agent-downlink-eu4.1`) adds the
-build, test, and lint commands here. rclone must be installed to run the integration tests.
+rclone and golangci-lint must be installed; integration tests fail, rather than skip, without rclone.
+The pre-commit hook in `.beads/hooks/pre-commit` runs the first four commands below on every commit.
+
+```bash
+go build .                      # builds ./agent-downlink
+gofmt -l .                      # must print nothing
+go vet ./...
+golangci-lint run               # config in .golangci.yml
+go test ./...                   # unit and integration tests (real rclone, local directory bucket)
+go test -tags e2e ./e2e/ -v     # end-to-end against a real B2 scratch bucket; never in CI; see e2e/README.md
+```
 
 ## Invariants
 
@@ -116,6 +125,19 @@ Each of these is a security or data-loss guardrail with no exceptions.
 Use red/green TDD for every feature and bugfix: write a failing test, watch it fail, write the
 minimum code to pass, refactor while green. Markdown and config files are exempt. Go-specific
 test rules load from `.claude/rules/go-testing.md` when you touch Go files.
+
+## SonarCloud Drift
+
+The SonarCloud drift audit job runs on every push to main and creates a transient GitHub issue when unreviewed hotspots or open issues are found. The issue tracks how many findings accumulate on main since the last fix round; fixes are tracked in beads, not in the issue (the GitHub issue itself is transient and auto-closes when findings are resolved).
+
+To run the audit script locally with coverage reporting only (no GitHub issue creation):
+```bash
+SONAR_TOKEN=<token> ./tools/sonar-audit.sh --report-only
+```
+To check a different branch:
+```bash
+SONAR_TOKEN=<token> ./tools/sonar-audit.sh --report-only --branch <branch>
+```
 
 ## Dependencies
 

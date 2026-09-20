@@ -1,0 +1,4 @@
+{"time":"2026-09-18T19:03:47.606091362-07:00","level":"notice","msg":"Removing partially written file on error: can't copy - source file is being updated (size changed from 300000014 to 300000021)","object":"big.jsonl.086572dc.partial","objectType":"*local.Object","source":"local/local.go:1728"}
+{"time":"2026-09-18T19:03:47.614904151-07:00","level":"error","msg":"Failed to copy: can't copy - source file is being updated (size changed from 300000014 to 300000021)","object":"big.jsonl","objectType":"*local.Object","source":"operations/copy.go:347"}
+{"time":"2026-09-18T19:03:47.615052128-07:00","level":"error","msg":"Attempt 1/1 failed with 1 errors and: can't copy - source file is being updated (size changed from 300000014 to 300000021)","source":"cmd/cmd.go:283"}
+{"time":"2026-09-18T19:03:47.615096172-07:00","level":"notice","msg":"Failed to copy: can't copy - source file is being updated (size changed from 300000014 to 300000021)","source":"cmd/cmd.go:334"}

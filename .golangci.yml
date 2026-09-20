@@ -1,0 +1,18 @@
+version: "2"
+
+run:
+  timeout: 3m
+
+linters:
+  default: none
+  enable:
+    - cyclop
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+  settings:
+    cyclop:
+      max-complexity: 15
+      package-average: 10.0

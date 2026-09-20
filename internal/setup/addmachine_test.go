@@ -120,6 +120,48 @@ func TestAddMachineOnAnUnconfiguredMachinePointsAtSetup(t *testing.T) {
 	}
 }
 
+func TestAddMachinePropagatesConfigLoadErrors(t *testing.T) {
+	home, _ := configured(t, "workstation", filepath.Join(t.TempDir(), "bucket"), "placeholder-password")
+	write(t, config.PathsFor(home).ConfigFile, "not valid toml [[[")
+	if _, err := addMachine(t, home, "laptop", "pw\n"); err == nil {
+		t.Error("AddMachine = nil error, want the config.toml parse error")
+	}
+}
+
+func TestAddMachinePropagatesRcloneConfLoadErrors(t *testing.T) {
+	home, _ := configured(t, "workstation", filepath.Join(t.TempDir(), "bucket"), "placeholder-password")
+	write(t, config.PathsFor(home).RcloneConf, "not valid rclone.conf [[[")
+	if err := config.CheckPermissions(config.PathsFor(home)); err != nil {
+		t.Fatalf("CheckPermissions before test: %v", err)
+	}
+	if _, err := addMachine(t, home, "laptop", "pw\n"); err == nil {
+		t.Error("AddMachine = nil error, want the rclone.conf parse error")
+	}
+}
+
+func TestAddMachinePropagatesMissingRcloneBinary(t *testing.T) {
+	home, _ := configured(t, "workstation", filepath.Join(t.TempDir(), "bucket"), "placeholder-password")
+	paths := config.PathsFor(home)
+	cfg, err := config.Load(paths.ConfigFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Rclone = filepath.Join(t.TempDir(), "no-such-rclone")
+	if err := cfg.Save(paths.ConfigFile); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := addMachine(t, home, "laptop", "pw\n"); err == nil {
+		t.Error("AddMachine = nil error, want the missing-rclone-binary error")
+	}
+}
+
+func TestAddMachinePropagatesAskSecretError(t *testing.T) {
+	home, _ := configured(t, "workstation", filepath.Join(t.TempDir(), "bucket"), "placeholder-password")
+	if _, err := addMachine(t, home, "laptop", ""); err == nil || !strings.Contains(err.Error(), "input ended before every question was answered") {
+		t.Errorf("AddMachine with no input = %v", err)
+	}
+}
+
 func TestAddMachineAsksBeforeReplacingAPassword(t *testing.T) {
 	home, _ := configured(t, "workstation", filepath.Join(t.TempDir(), "bucket"), "placeholder-password")
 	if _, err := addMachine(t, home, "laptop", "first-password\n"); err != nil {

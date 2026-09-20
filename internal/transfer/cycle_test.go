@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -386,6 +387,150 @@ func TestAWarningCountsAsSuccessAndIsLoggedWithItsDetail(t *testing.T) {
 	}
 	if ws.errors.Len() != 0 {
 		t.Errorf("a warning was shown as an error: %q", ws.errors.String())
+	}
+}
+
+func TestPullReportsMirrorCreationError(t *testing.T) {
+	dir := t.TempDir()
+	blocker := filepath.Join(dir, "blocker")
+	if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c := &Cycle{
+		Machine:    "workstation",
+		Mirror:     filepath.Join(blocker, "mirror"), // blocker is a file, so MkdirAll fails
+		Readable:   []string{"laptop"},
+		StatusPath: filepath.Join(dir, "status.json"),
+		Log:        runlog.New(filepath.Join(dir, "run.log")),
+		Now:        time.Now,
+		Errors:     io.Discard,
+	}
+	if c.Pull(context.Background()) {
+		t.Error("Pull reported success although the mirror could not be created")
+	}
+}
+
+func TestStorePluginsSkipsSourcesWithNoManifest(t *testing.T) {
+	dir := t.TempDir()
+	c := &Cycle{
+		Machine:    "workstation",
+		Mirror:     filepath.Join(dir, "mirror"),
+		Sources:    []config.Source{{Tool: "claude-code", Root: dir, Paths: []string{"projects"}}},
+		StatusPath: filepath.Join(dir, "status.json"),
+		Log:        runlog.New(filepath.Join(dir, "run.log")),
+		Now:        time.Now,
+		Errors:     io.Discard,
+	}
+	if !c.storePlugins() {
+		t.Error("storePlugins failed although no source has a plugin manifest")
+	}
+}
+
+func TestStorePluginsRecordsFailureWhenStoreErrors(t *testing.T) {
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, "plugins", "installed_plugins.json"), `{"a":"1.0.0"}`)
+	blocker := filepath.Join(dir, "blocker")
+	if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c := &Cycle{
+		Machine:    "workstation",
+		Mirror:     blocker, // machineDir() sits under a file, so Store's MkdirAll fails
+		Sources:    []config.Source{{Tool: "claude-code", Root: dir, PluginManifest: "plugins/installed_plugins.json"}},
+		StatusPath: filepath.Join(dir, "status.json"),
+		Log:        runlog.New(filepath.Join(dir, "run.log")),
+		Now:        time.Now,
+		Errors:     io.Discard,
+	}
+	if c.storePlugins() {
+		t.Error("storePlugins reported success although the manifest could not be stored")
+	}
+}
+
+func TestLocalCopyReportsDirectoryCreationError(t *testing.T) {
+	dir := t.TempDir()
+	blocker := filepath.Join(dir, "blocker")
+	if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c := &Cycle{
+		Machine:    "workstation",
+		Mirror:     blocker,
+		StatusPath: filepath.Join(dir, "status.json"),
+		Log:        runlog.New(filepath.Join(dir, "run.log")),
+		Now:        time.Now,
+		Errors:     io.Discard,
+	}
+	if c.localCopy(context.Background()) {
+		t.Error("localCopy reported success although the directory could not be created")
+	}
+}
+
+func TestPushReportsDirectoryCreationError(t *testing.T) {
+	dir := t.TempDir()
+	blocker := filepath.Join(dir, "blocker")
+	if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c := &Cycle{
+		Machine:    "workstation",
+		Mirror:     blocker,
+		StatusPath: filepath.Join(dir, "status.json"),
+		Log:        runlog.New(filepath.Join(dir, "run.log")),
+		Now:        time.Now,
+		Errors:     io.Discard,
+	}
+	if c.push(context.Background()) {
+		t.Error("push reported success although the directory could not be created")
+	}
+}
+
+func TestLocalCopyRecordsWorstOutcomeAndDetailsAcrossPaths(t *testing.T) {
+	ctx := context.Background()
+	_, ms := newMachines(t, []string{"workstation"})
+	ws := ms["workstation"]
+	write(t, filepath.Join(ws.claude, "projects", "proj-a", "s1.jsonl"), "from workstation\n")
+	ws.cycle.Sources[0].Paths = append(ws.cycle.Sources[0].Paths, "does-not-exist")
+
+	if ws.cycle.localCopy(ctx) {
+		t.Error("localCopy reported success although one path does not exist")
+	}
+	if !strings.Contains(ws.errors.String(), "local-copy FAILED") {
+		t.Errorf("errors = %q", ws.errors.String())
+	}
+}
+
+func TestRecordReportsLogWriteError(t *testing.T) {
+	dir := t.TempDir()
+	logIsADir := filepath.Join(dir, "run.log")
+	if err := os.Mkdir(logIsADir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	c := &Cycle{
+		StatusPath: filepath.Join(dir, "status.json"),
+		Log:        runlog.New(logIsADir),
+		Now:        time.Now,
+		Errors:     io.Discard,
+	}
+	if c.record("local-copy", rclone.Success, "") {
+		t.Error("record reported success although the log write failed")
+	}
+}
+
+func TestRecordReportsStatusLoadError(t *testing.T) {
+	dir := t.TempDir()
+	statusIsADir := filepath.Join(dir, "status.json")
+	if err := os.Mkdir(statusIsADir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	c := &Cycle{
+		StatusPath: statusIsADir,
+		Log:        runlog.New(filepath.Join(dir, "run.log")),
+		Now:        time.Now,
+		Errors:     io.Discard,
+	}
+	if c.record("local-copy", rclone.Success, "") {
+		t.Error("record reported success although the status file could not be read")
 	}
 }
 

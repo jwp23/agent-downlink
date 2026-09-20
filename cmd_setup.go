@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/jwp23/agent-downlink/internal/scheduler"
 	"github.com/jwp23/agent-downlink/internal/setup"
 )
 
@@ -27,11 +26,11 @@ func cmdSetup(e env, args []string) int {
 		Hostname: hostname,
 		NoTimer:  *noTimer,
 		InstallTimer: func() error {
-			binary, err := ownBinary()
+			binary, err := ownBinaryFn()
 			if err != nil {
 				return err
 			}
-			return scheduler.New(e.home, binary).Install()
+			return newScheduler(e.home, binary).Install()
 		},
 	}
 	if err := setup.Run(context.Background(), setup.NewPrompter(e.stdin, e.stdout), opts); err != nil {

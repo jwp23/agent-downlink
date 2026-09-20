@@ -8,17 +8,22 @@ import (
 	"github.com/jwp23/agent-downlink/internal/scheduler"
 )
 
+// newScheduler and ownBinaryFn are the real implementations; tests override them so cmdTimer
+// never has to touch the real system.
+var newScheduler = scheduler.New
+var ownBinaryFn = ownBinary
+
 func cmdTimer(e env, args []string) int {
 	if len(args) != 1 || (args[0] != "install" && args[0] != "remove") {
 		_, _ = fmt.Fprintln(e.stderr, "usage: agent-downlink timer install|remove")
 		return 2
 	}
-	binary, err := ownBinary()
+	binary, err := ownBinaryFn()
 	if err != nil {
 		_, _ = fmt.Fprintf(e.stderr, "agent-downlink timer: %v\n", err)
 		return 1
 	}
-	s := scheduler.New(e.home, binary)
+	s := newScheduler(e.home, binary)
 	if args[0] == "install" {
 		err = s.Install()
 	} else {

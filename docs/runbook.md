@@ -45,8 +45,10 @@ unauthorized)`. `listBuckets` is not needed: a key scoped to one bucket carries 
 name and ID in its authorization response, which is where rclone reads them.
 
 ```sh
+export B2_ACCOUNT_INFO="$(mktemp -d)/account_info"
 b2 account authorize
 b2 key create --bucket <bucket> <machine> listFiles,readFiles,writeFiles
+rm -rf "$(dirname "$B2_ACCOUNT_INFO")"
 ```
 
 These are the `b2` tool's current noun-verb commands; 3.x releases spell them
@@ -57,6 +59,13 @@ Give `b2 account authorize` nothing on the command line. It prompts for the mast
 reads the key without echoing it, so neither reaches your shell history or a process's
 arguments, where another local account could read them. Creating a key needs the master key's
 `writeKeys` capability, which the machine key deliberately does not have.
+
+`b2 account authorize` caches the key it authorized with in a SQLite file, `~/.b2_account_info`
+unless `B2_ACCOUNT_INFO` says otherwise, and leaves it there. Pointing that at a fresh private
+directory and deleting the directory afterwards is what keeps the master key from resting on
+disk, the same reason section 1 sets the lifecycle rule in the web console rather than from the
+command line. Do not reach for `b2 account clear` instead: it empties the cache but does not
+remove the file (Backblaze advisory GHSA-8wr4-2wm6-w3pr).
 
 `key create` prints the key ID and the application key, the only time the key itself is ever
 shown. Save both in your password manager under `<machine>`; you will paste them into
@@ -97,8 +106,10 @@ data even briefly, which is why ADR-002 calls for it.
    as to the bucket. The trailing slash is what confines the key to that machine's area.
 
    ```sh
+   export B2_ACCOUNT_INFO="$(mktemp -d)/account_info"
    b2 account authorize
    b2 key create --bucket <bucket> --name-prefix <machine>/ <machine>-retire listFiles,readFiles,writeFiles
+   rm -rf "$(dirname "$B2_ACCOUNT_INFO")"
    ```
 2. On the retiring machine, run `agent-downlink setup --no-timer`, giving that key and the
    machine's *existing* encryption password (so it replaces the same machine's area rather than

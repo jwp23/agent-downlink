@@ -50,16 +50,24 @@ The commands below are the `b2` tool's current noun-verb form; 3.x releases spel
 installed with `b2 version` and `b2 key create --help`.
 
 ```sh
+export B2_ACCOUNT_INFO="$(mktemp -d)/account_info"
 b2 account authorize
 b2 bucket create <bucket> allPrivate
 b2 key create --bucket <bucket> e2e-suite listFiles,readFiles,writeFiles
 b2 key create --bucket <bucket> --name-prefix <machine>/ e2e-suite-prefix listFiles,readFiles,writeFiles
+rm -rf "$(dirname "$B2_ACCOUNT_INFO")"
 ```
 
 Give `b2 account authorize` nothing on the command line. It prompts for the master key ID and
 reads the key without echoing it, so neither reaches your shell history or a process's
 arguments, where another local account could read them. Creating a key needs the master key's
 `writeKeys` capability, which neither of these two keys has.
+
+`b2 account authorize` caches the key it authorized with in a SQLite file, `~/.b2_account_info`
+unless `B2_ACCOUNT_INFO` says otherwise, and leaves it there; the temporary path above and the
+`rm` that follows keep the master key from resting on disk. `b2 account clear` is not a
+substitute — it empties the cache without removing the file (Backblaze advisory
+GHSA-8wr4-2wm6-w3pr).
 
 The first key is `AGENT_DOWNLINK_E2E_KEY_ID` / `AGENT_DOWNLINK_E2E_KEY` and the second is
 `AGENT_DOWNLINK_E2E_PREFIX_KEY_ID` / `AGENT_DOWNLINK_E2E_PREFIX_KEY`; `<machine>` is the value

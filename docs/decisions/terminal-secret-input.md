@@ -2,7 +2,7 @@
 
 ## Decision
 
-`setup` and `add-machine` read the storage key and encryption passwords with
+`setup` and `machine add` read the storage key and encryption passwords with
 `term.ReadPassword` from `golang.org/x/term`, so nothing typed or pasted is echoed. When
 standard input is not a terminal, they read a plain line instead.
 

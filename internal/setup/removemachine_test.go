@@ -10,6 +10,7 @@ import (
 
 	"github.com/jwp23/agent-downlink/internal/config"
 	"github.com/jwp23/agent-downlink/internal/status"
+	"github.com/jwp23/agent-downlink/internal/transfer"
 )
 
 // readable sets up workstation with laptop readable, a mirror folder for each, and a status
@@ -182,5 +183,28 @@ func TestRemoveMachinePropagatesConfirmError(t *testing.T) {
 	home, _, _ := readable(t)
 	if _, err := removeMachine(t, home, "laptop", ""); err == nil || !strings.Contains(err.Error(), "input ended before every question was answered") {
 		t.Errorf("RemoveMachine with no input = %v", err)
+	}
+}
+
+func TestRemoveMachineRefusesWhileARunHoldsTheLock(t *testing.T) {
+	home, paths, mirror := readable(t)
+	release, acquired, err := transfer.Lock(paths.LockFile)
+	if err != nil || !acquired {
+		t.Fatalf("Lock = %v, %v", acquired, err)
+	}
+	defer release()
+	confBefore, statusBefore := snapshot(t, paths)
+
+	_, err = removeMachine(t, home, "laptop", "yes\n")
+	if err == nil || !strings.Contains(err.Error(), "a run is in progress") {
+		t.Errorf("RemoveMachine during a run = %v, want a refusal", err)
+	}
+
+	confAfter, statusAfter := snapshot(t, paths)
+	if !bytes.Equal(confBefore, confAfter) || !bytes.Equal(statusBefore, statusAfter) {
+		t.Error("a refused remove-machine changed a file")
+	}
+	if _, err := os.Stat(filepath.Join(mirror, "laptop", "claude-code", "projects", "proj-b", "s2.jsonl")); err != nil {
+		t.Errorf("mirror/laptop changed during a run: %v", err)
 	}
 }

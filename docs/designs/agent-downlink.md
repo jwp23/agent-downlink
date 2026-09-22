@@ -89,7 +89,7 @@ the session ran.
 | `agent-downlink setup` | Once per machine. Asks for a machine name, the bucket name, and the storage key, generates the machine's encryption password (or accepts an existing one, for a machine that replaces one of the same name), writes the config files, installs the hourly timer, and prints what to save in the password manager. A flag omits the timer for a machine making a single push. |
 | `agent-downlink machine add <name>` | On a reader. Takes another machine's encryption password and makes that machine readable here. |
 | `agent-downlink machine remove <name>` | On a reader. After confirmation, forgets that machine's encryption password and status here and deletes its folder from the mirror, so it is no longer pulled. Never this machine's own name. The machine's area in the bucket is untouched. |
-| `agent-downlink machine list` | Every machine readable here, one name per line, sorted, with this machine marked `(this machine)`. Read from `rclone.conf`; no rclone call and no status. |
+| `agent-downlink machine list` | Every machine readable here, one name per line, sorted, with this machine marked `(this machine)`. Reads the config files only; no rclone call and no status. |
 | `agent-downlink run` | What the timer invokes: the full cycle below. |
 | `agent-downlink push` | The cycle's local-copy and push steps, on demand. |
 | `agent-downlink pull [--transfers=N]` | The cycle's pull step, on demand. `--transfers=N` overrides the configured copy parallelism for this pull alone, for tuning one pull without editing `config.toml`. |

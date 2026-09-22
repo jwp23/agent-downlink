@@ -13,7 +13,7 @@ func TestSourcesResolvesBuiltinsThenCustomTools(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []Source{
-		{Tool: "claude-code", Root: "/home/u/.claude", Paths: []string{"projects"}, PluginManifest: "plugins/installed_plugins.json"},
+		{Tool: "claude-code", Root: "/home/u/.claude", Paths: []string{"projects", "history.jsonl"}, PluginManifest: "plugins/installed_plugins.json"},
 		{Tool: "other-agent", Root: "/data/other", Paths: []string{"sessions"}},
 	}
 	if !reflect.DeepEqual(got, want) {

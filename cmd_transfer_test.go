@@ -51,12 +51,23 @@ func writeRecord(t *testing.T, home, rel, content string) {
 	}
 }
 
+// writeHistory gives a machine its history.jsonl, another built-in path a successful push
+// needs present: a machine with project records to push has typed prompts too.
+func writeHistory(t *testing.T, home, content string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(home, ".claude", "history.jsonl"), []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestRunPushesAndPullsBetweenTwoConfiguredMachines(t *testing.T) {
 	bucket := filepath.Join(t.TempDir(), "bucket")
 	ws, _, wsErr := configuredEnv(t, "workstation", bucket, "laptop")
 	lt, _, ltErr := configuredEnv(t, "laptop", bucket, "workstation")
 	writeRecord(t, ws.home, "proj-a/s1.jsonl", "from workstation\n")
+	writeHistory(t, ws.home, "typed prompt history\n")
 	writeRecord(t, lt.home, "proj-b/s2.jsonl", "from laptop\n")
+	writeHistory(t, lt.home, "typed prompt history\n")
 
 	if got := dispatch(ws, []string{"push"}); got != 0 {
 		t.Fatalf("workstation push: exit %d, stderr %q", got, wsErr())
@@ -86,6 +97,7 @@ func TestRunExitsNonZeroWhenAStepFailedAndShowsItToAPerson(t *testing.T) {
 	// laptop is readable but has never pushed, so pull:laptop fails.
 	ws, stdout, stderr := configuredEnv(t, "workstation", bucket, "laptop")
 	writeRecord(t, ws.home, "proj-a/s1.jsonl", "from workstation\n")
+	writeHistory(t, ws.home, "typed prompt history\n")
 
 	if got := dispatch(ws, []string{"run"}); got != 1 {
 		t.Fatalf("exit status = %d, want 1", got)
@@ -104,6 +116,7 @@ func TestUnderTheTimerNothingIsPrinted(t *testing.T) {
 	ws, stdout, stderr := configuredEnv(t, "workstation", bucket, "laptop")
 	ws.interactive = false
 	writeRecord(t, ws.home, "proj-a/s1.jsonl", "from workstation\n")
+	writeHistory(t, ws.home, "typed prompt history\n")
 
 	if got := dispatch(ws, []string{"run"}); got != 1 { // pull:laptop fails, as above
 		t.Fatalf("exit status = %d, want 1", got)
@@ -147,6 +160,7 @@ func TestRefusesToRunOnLoosePermissions(t *testing.T) {
 func TestStartupFailureClearsAfterRecovery(t *testing.T) {
 	ws, _, wsErr := configuredEnv(t, "workstation", filepath.Join(t.TempDir(), "bucket"))
 	writeRecord(t, ws.home, "proj-a/s1.jsonl", "from workstation\n")
+	writeHistory(t, ws.home, "typed prompt history\n")
 	paths := config.PathsFor(ws.home)
 	if err := os.Chmod(paths.RcloneConf, 0o644); err != nil {
 		t.Fatal(err)

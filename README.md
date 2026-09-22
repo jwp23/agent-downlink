@@ -71,6 +71,7 @@ mirror/
   <machine>/
     <tool>/                                  e.g. claude-code
       projects/...                           the tool's native tree, byte for byte
+      history.jsonl                          cross-project prompt history, byte for byte
       plugins/installed_plugins/<UTC timestamp>.json
 ```
 

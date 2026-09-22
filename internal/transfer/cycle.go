@@ -112,7 +112,15 @@ func (c *Cycle) localCopy(ctx context.Context) bool {
 	for _, s := range c.Sources {
 		for _, p := range s.Paths {
 			rel := filepath.FromSlash(p)
-			res := c.Runner.Copy(ctx, filepath.Join(s.Root, rel), filepath.Join(c.machineDir(), s.Tool, rel))
+			src := filepath.Join(s.Root, rel)
+			dst := filepath.Join(c.machineDir(), s.Tool, rel)
+			// rclone copy treats a destination path as a directory to copy into: a file source
+			// with the mirror path as its destination lands one level too deep. Point a file
+			// source at its destination's parent instead, so rclone keeps its own basename.
+			if info, err := os.Stat(src); err == nil && !info.IsDir() {
+				dst = filepath.Join(c.machineDir(), s.Tool, filepath.Dir(rel))
+			}
+			res := c.Runner.Copy(ctx, src, dst)
 			if res.Outcome > worst {
 				worst = res.Outcome
 			}

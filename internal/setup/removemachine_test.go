@@ -78,7 +78,7 @@ func TestRemoveMachineForgetsTheMachineHere(t *testing.T) {
 		t.Errorf("machines = %v, want only workstation", got)
 	}
 	if err := config.CheckPermissions(paths); err != nil {
-		t.Errorf("CheckPermissions after remove-machine = %v", err)
+		t.Errorf("CheckPermissions after machine remove = %v", err)
 	}
 
 	st, err := status.Load(paths.StatusFile)
@@ -150,7 +150,7 @@ func TestRemoveMachineRejectsBadInput(t *testing.T) {
 	}
 	confAfter, statusAfter := snapshot(t, paths)
 	if !bytes.Equal(confBefore, confAfter) || !bytes.Equal(statusBefore, statusAfter) {
-		t.Error("a refused remove-machine changed a file")
+		t.Error("a refused machine remove changed a file")
 	}
 }
 
@@ -202,7 +202,7 @@ func TestRemoveMachineRefusesWhileARunHoldsTheLock(t *testing.T) {
 
 	confAfter, statusAfter := snapshot(t, paths)
 	if !bytes.Equal(confBefore, confAfter) || !bytes.Equal(statusBefore, statusAfter) {
-		t.Error("a refused remove-machine changed a file")
+		t.Error("a refused machine remove changed a file")
 	}
 	if _, err := os.Stat(filepath.Join(mirror, "laptop", "claude-code", "projects", "proj-b", "s2.jsonl")); err != nil {
 		t.Errorf("mirror/laptop changed during a run: %v", err)

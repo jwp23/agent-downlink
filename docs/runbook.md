@@ -93,13 +93,13 @@ shown. Save both in your password manager under `<machine>`; you will paste them
 
 On the machine that should be able to read another machine's records:
 
-1. Run `agent-downlink add-machine <machine>`, giving `<machine>`'s encryption password from
+1. Run `agent-downlink machine add <machine>`, giving `<machine>`'s encryption password from
    your password manager.
 2. It prints that `<machine>` is now readable here.
 3. The next `agent-downlink run` (or `agent-downlink pull`) pulls `<machine>`'s records into the
    mirror. Check with `agent-downlink status`.
 
-To stop reading a machine here, run `agent-downlink remove-machine <machine>`. After you
+To stop reading a machine here, run `agent-downlink machine remove <machine>`. After you
 confirm, it forgets the machine's password and status on this machine and deletes its mirror
 folder. The machine's area in the bucket stays; deleting that is done by hand in the web
 console, if ever, after section 5.
@@ -149,7 +149,7 @@ data even briefly, which is why ADR-002 calls for it.
    3.x releases spell this `b2 delete-key`. Confirm against what you have installed with
    `b2 key delete --help`.
 5. If this machine ever had the hourly timer installed, run `agent-downlink timer remove`.
-6. On each reader that should no longer keep a copy, run `agent-downlink remove-machine
+6. On each reader that should no longer keep a copy, run `agent-downlink machine remove
    <machine>` (section 4).
 
 ## 6. A machine is lost or stolen

@@ -16,7 +16,7 @@ Refuse these, or raise them with the operator, rather than building them:
 
 - No consumer features: no dashboards, transcript parsing, cross-tool schema, or scrubbing of
   records. The tool never imports or knows about a consumer.
-- No deletion, sync, or pruning of a source directory or the bucket. `remove-machine` is the
+- No deletion, sync, or pruning of a source directory or the bucket. `machine remove` is the
   only exception: after confirmation, it removes another machine's folder from the local
   mirror and refuses this machine's own name.
 - No automated provisioning of buckets, lifecycle rules, or storage keys. That is a runbook
@@ -106,7 +106,7 @@ Each of these is a security or data-loss guardrail with no exceptions.
 - **Secrets never reach a log, a process argument, or test output.** Other users on a machine
   can read a process's arguments.
 - **Nothing deletes in a source directory or the bucket.** Every transfer is `rclone copy`. The
-  one deletion the tool makes is `remove-machine`, which after confirmation removes another
+  one deletion the tool makes is `machine remove`, which after confirmation removes another
   machine's folder from the local mirror; it refuses this machine's own name.
 - **The mirror layout is the public interface**: `<machine>/<tool>/<the tool's native tree>`.
   Changing it needs an ADR.

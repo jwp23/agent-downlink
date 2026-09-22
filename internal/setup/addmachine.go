@@ -15,19 +15,11 @@ func AddMachine(ctx context.Context, p *Prompter, home, machine string) error {
 	if err := config.ValidateMachineName(machine); err != nil {
 		return err
 	}
-	paths := config.PathsFor(home)
-	if err := config.CheckPermissions(paths); err != nil {
-		return err
-	}
-	cfg, err := config.Load(paths.ConfigFile)
+	paths, cfg, secrets, err := config.LoadChecked(home)
 	if err != nil {
 		return err
 	}
-	secrets, err := config.LoadRcloneConf(paths.RcloneConf)
-	if err != nil {
-		return err
-	}
-	runner, err := rclone.New(cfg.Rclone, paths.RcloneConf, rclone.Concurrency{}) // add-machine only obscures a password
+	runner, err := rclone.New(cfg.Rclone, paths.RcloneConf, rclone.Concurrency{}) // machine add only obscures a password
 	if err != nil {
 		return err
 	}

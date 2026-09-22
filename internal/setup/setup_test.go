@@ -107,7 +107,7 @@ func TestSetupShowsTheGeneratedPasswordAndHowToAddAReader(t *testing.T) {
 	if password := shownPassword(t, out); len(password) < 40 {
 		t.Errorf("generated password is %d characters long", len(password))
 	}
-	if !strings.Contains(out, "password manager") || !strings.Contains(out, "agent-downlink add-machine workstation") {
+	if !strings.Contains(out, "password manager") || !strings.Contains(out, "agent-downlink machine add workstation") {
 		t.Errorf("output does not say what to save or how to add a reader:\n%s", out)
 	}
 }

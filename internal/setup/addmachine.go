@@ -15,15 +15,7 @@ func AddMachine(ctx context.Context, p *Prompter, home, machine string) error {
 	if err := config.ValidateMachineName(machine); err != nil {
 		return err
 	}
-	paths := config.PathsFor(home)
-	if err := config.CheckPermissions(paths); err != nil {
-		return err
-	}
-	cfg, err := config.Load(paths.ConfigFile)
-	if err != nil {
-		return err
-	}
-	secrets, err := config.LoadRcloneConf(paths.RcloneConf)
+	paths, cfg, secrets, err := loadReaderConfig(home)
 	if err != nil {
 		return err
 	}

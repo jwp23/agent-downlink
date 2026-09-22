@@ -556,6 +556,50 @@ func TestLocalCopyRecordsWorstOutcomeAndDetailsAcrossPaths(t *testing.T) {
 	}
 }
 
+// TestLocalCopyPutsAFileSourceAtItsMirrorPathNotADirectory guards the history.jsonl bug: rclone
+// treats a file destination path as a directory to copy into, so a naive "same relative path"
+// copy of a file source produces <dest>/<basename> instead of <dest>.
+func TestLocalCopyPutsAFileSourceAtItsMirrorPathNotADirectory(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	root := filepath.Join(dir, "claude")
+	write(t, filepath.Join(root, "projects", "proj-a", "s1.jsonl"), "from workstation\n")
+	write(t, filepath.Join(root, "history.jsonl"), "typed prompt history\n")
+
+	runner, err := rclone.New("", filepath.Join(dir, "rclone.conf"))
+	if err != nil {
+		t.Fatalf("integration tests need rclone: %v", err)
+	}
+	c := &Cycle{
+		Machine:    "workstation",
+		Mirror:     filepath.Join(dir, "mirror"),
+		Sources:    []config.Source{{Tool: "claude-code", Root: root, Paths: []string{"projects", "history.jsonl"}}},
+		Runner:     runner,
+		StatusPath: filepath.Join(dir, "status.json"),
+		Log:        runlog.New(filepath.Join(dir, "run.log")),
+		Now:        time.Now,
+		Errors:     io.Discard,
+	}
+	if !c.localCopy(ctx) {
+		t.Fatal("localCopy failed")
+	}
+
+	historyPath := filepath.Join(dir, "mirror", "workstation", "claude-code", "history.jsonl")
+	info, err := os.Stat(historyPath)
+	if err != nil {
+		t.Fatalf("history.jsonl not copied: %v", err)
+	}
+	if info.IsDir() {
+		t.Fatalf("%s is a directory, want a file", historyPath)
+	}
+	if got := mustRead(t, historyPath); got != "typed prompt history\n" {
+		t.Errorf("history.jsonl content = %q", got)
+	}
+	if got := mustRead(t, filepath.Join(dir, "mirror", "workstation", "claude-code", "projects", "proj-a", "s1.jsonl")); got != "from workstation\n" {
+		t.Errorf("directory source still copies as before: content = %q", got)
+	}
+}
+
 func TestRecordReportsLogWriteError(t *testing.T) {
 	dir := t.TempDir()
 	logIsADir := filepath.Join(dir, "run.log")

@@ -22,7 +22,7 @@ var builtinTools = map[string]func(home string) Source{
 		return Source{
 			Tool:           "claude-code",
 			Root:           filepath.Join(home, ".claude"),
-			Paths:          []string{"projects"},
+			Paths:          []string{"projects", "history.jsonl"},
 			PluginManifest: "plugins/installed_plugins.json",
 		}
 	},

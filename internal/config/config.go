@@ -62,12 +62,12 @@ func (f File) Validate() error {
 	if f.Rclone != "" && !filepath.IsAbs(f.Rclone) {
 		return fmt.Errorf("rclone must be an absolute path or empty, got %q", f.Rclone)
 	}
-	// Zero is how an omitted field arrives, and means rclone's own default.
+	// Zero is how an omitted field arrives, so zero and omitted both mean rclone's default.
 	if f.Transfers < 0 {
-		return fmt.Errorf("transfers must be 1 or more, or omitted for rclone's default, got %d", f.Transfers)
+		return fmt.Errorf("transfers must be 1 or more; 0 or omitted means rclone's default of 4, got %d", f.Transfers)
 	}
 	if f.Checkers < 0 {
-		return fmt.Errorf("checkers must be 1 or more, or omitted for rclone's default, got %d", f.Checkers)
+		return fmt.Errorf("checkers must be 1 or more; 0 or omitted means rclone's default of 8, got %d", f.Checkers)
 	}
 	return validateToolNames(f.Tools, f.CustomTools)
 }

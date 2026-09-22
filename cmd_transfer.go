@@ -41,7 +41,7 @@ func cmdPull(e env, args []string) int {
 		return 2
 	}
 	if *transfers < 0 {
-		_, _ = fmt.Fprintf(e.stderr, "agent-downlink pull: --transfers must be 1 or more, got %d\n", *transfers)
+		_, _ = fmt.Fprintf(e.stderr, "agent-downlink pull: --transfers must be 1 or more; 0 keeps the value from config.toml, got %d\n", *transfers)
 		return 2
 	}
 	return runCycle(e, "pull", false, *transfers, (*transfer.Cycle).Pull)

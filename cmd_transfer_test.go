@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -191,13 +190,13 @@ func TestStartupFailureClearsAfterRecovery(t *testing.T) {
 // is started with, one per line, to the log file it returns.
 func recordingRclone(t *testing.T, dir string) (wrapper, argLog string) {
 	t.Helper()
-	rcloneBinary, err := exec.LookPath("rclone")
+	installed, err := rclone.New("", "/unused", rclone.Concurrency{}) // for the path of the real rclone
 	if err != nil {
 		t.Fatalf("integration tests need rclone: %v", err)
 	}
 	argLog = filepath.Join(dir, "args.log")
 	wrapper = filepath.Join(dir, "rclone-recording-args")
-	script := fmt.Sprintf("#!/bin/sh\nprintf '%%s\\n' \"$@\" >> %q\nexec %q \"$@\"\n", argLog, rcloneBinary)
+	script := fmt.Sprintf("#!/bin/sh\nprintf '%%s\\n' \"$@\" >> %q\nexec %q \"$@\"\n", argLog, installed.Binary())
 	if err := os.WriteFile(wrapper, []byte(script), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -205,14 +204,14 @@ func recordingRclone(t *testing.T, dir string) (wrapper, argLog string) {
 }
 
 // useRclone points a configured machine at a particular rclone binary and copy parallelism.
-func useRclone(t *testing.T, e env, binary string, transfers int) {
+func useRclone(t *testing.T, e env, binary string, transfers, checkers int) {
 	t.Helper()
 	path := config.PathsFor(e.home).ConfigFile
 	cfg, err := config.Load(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg.Rclone, cfg.Transfers = binary, transfers
+	cfg.Rclone, cfg.Transfers, cfg.Checkers = binary, transfers, checkers
 	if err := cfg.Save(path); err != nil {
 		t.Fatal(err)
 	}
@@ -229,7 +228,8 @@ func TestPullTakesItsParallelismFromConfigAndTheFlagOverridesIt(t *testing.T) {
 
 	ws, _, wsErr := configuredEnv(t, "workstation", bucket, "laptop")
 	wrapper, argLog := recordingRclone(t, t.TempDir())
-	useRclone(t, ws, wrapper, 2)
+	// Values no default would produce, so a pull that ignored config.toml would show up.
+	useRclone(t, ws, wrapper, 2, 3)
 
 	for _, tc := range []struct {
 		args          []string
@@ -237,6 +237,7 @@ func TestPullTakesItsParallelismFromConfigAndTheFlagOverridesIt(t *testing.T) {
 	}{
 		{[]string{"pull"}, "2"},
 		{[]string{"pull", "--transfers=7"}, "7"},
+		{[]string{"pull", "--transfers=0"}, "2"}, // zero keeps the configured value
 	} {
 		if err := os.Remove(argLog); err != nil && !os.IsNotExist(err) {
 			t.Fatal(err)
@@ -248,8 +249,8 @@ func TestPullTakesItsParallelismFromConfigAndTheFlagOverridesIt(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		// checkers is unset in config.toml, so every pull keeps rclone's own default.
-		for _, want := range []string{"--transfers\n" + tc.wantTransfers + "\n", "--checkers\n8\n"} {
+		// checkers has no flag, so every pull uses the configured value.
+		for _, want := range []string{"--transfers\n" + tc.wantTransfers + "\n", "--checkers\n3\n"} {
 			if !strings.Contains(string(logged), want) {
 				t.Errorf("%v: rclone was not given %q:\n%s", tc.args, strings.TrimSuffix(want, "\n"), logged)
 			}

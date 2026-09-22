@@ -52,12 +52,12 @@ Consumers may rely on the following:
 
 - The path is always `<machine>/<tool>/` followed by the tool's native layout, unmodified.
 - Every machine appears in the mirror as ordinary files, including the machine the mirror is
-  on, unless `remove-machine` has removed another machine's folder after confirmation. There
+  on, unless `machine remove` has removed another machine's folder after confirmation. There
   are no symbolic links.
 - The tool never removes or renames a file in a source directory or the bucket. Records the
   agent later prunes from its own directory remain in the bucket. They remain in the mirror
-  unless `remove-machine` removes that machine's folder after confirmation. The one deletion
-  the tool makes is `remove-machine`, which after confirmation removes another machine's
+  unless `machine remove` removes that machine's folder after confirmation. The one deletion
+  the tool makes is `machine remove`, which after confirmation removes another machine's
   folder from the local mirror.
 - A file still being written by an agent may end in a partial line. A later run completes it.
 - Consumers read the mirror and never write to it.
@@ -87,8 +87,9 @@ the session ran.
 | Command | Purpose |
 |---|---|
 | `agent-downlink setup` | Once per machine. Asks for a machine name, the bucket name, and the storage key, generates the machine's encryption password (or accepts an existing one, for a machine that replaces one of the same name), writes the config files, installs the hourly timer, and prints what to save in the password manager. A flag omits the timer for a machine making a single push. |
-| `agent-downlink add-machine <name>` | On a reader. Takes another machine's encryption password and makes that machine readable here. |
-| `agent-downlink remove-machine <name>` | On a reader. After confirmation, forgets that machine's encryption password and status here and deletes its folder from the mirror, so it is no longer pulled. Never this machine's own name. The machine's area in the bucket is untouched. |
+| `agent-downlink machine add <name>` | On a reader. Takes another machine's encryption password and makes that machine readable here. |
+| `agent-downlink machine remove <name>` | On a reader. After confirmation, forgets that machine's encryption password and status here and deletes its folder from the mirror, so it is no longer pulled. Never this machine's own name. The machine's area in the bucket is untouched. |
+| `agent-downlink machine list` | Every machine readable here, one name per line, sorted, with this machine marked `(this machine)`. Read from `rclone.conf`; no rclone call and no status. |
 | `agent-downlink run` | What the timer invokes: the full cycle below. |
 | `agent-downlink push` | The cycle's local-copy and push steps, on demand. |
 | `agent-downlink pull [--transfers=N]` | The cycle's pull step, on demand. `--transfers=N` overrides the configured copy parallelism for this pull alone, for tuning one pull without editing `config.toml`. |
@@ -170,7 +171,7 @@ passwords to `rclone config create`.
 | `scheduler` | Generate and install a systemd user timer or a launchd agent that invokes `run` hourly. |
 | `status` | Record step outcomes; render the status report. |
 | `runlog` | Append to the log file and rotate it. |
-| `setup` | The interactive `setup` and `add-machine` flows, composed from the components above. |
+| `setup` | The interactive `setup` and `machine add`/`machine remove` flows, and `machine list`, composed from the components above. |
 
 ## Failure handling
 

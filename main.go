@@ -16,6 +16,7 @@ Commands:
   setup [--no-timer]     Configure this machine and install the hourly timer
   machine add <name>     Make another machine's records readable here
   machine remove <name>  Stop reading another machine here and delete its mirror folder
+  machine list           List every machine readable here
   run                    Full cycle: copy local records, push, pull (what the timer runs)
   push                   Copy local records into the mirror and push them
   pull [--transfers=N]   Pull every other readable machine into the mirror

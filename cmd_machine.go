@@ -7,7 +7,7 @@ import (
 	"github.com/jwp23/agent-downlink/internal/setup"
 )
 
-const machineUsage = "usage: agent-downlink machine add <name> | remove <name>"
+const machineUsage = "usage: agent-downlink machine add <name> | remove <name> | list"
 
 // cmdMachine manages which machines are readable here.
 func cmdMachine(e env, args []string) int {
@@ -20,6 +20,8 @@ func cmdMachine(e env, args []string) int {
 		return cmdMachineAdd(e, args[1:])
 	case "remove":
 		return cmdMachineRemove(e, args[1:])
+	case "list":
+		return cmdMachineList(e, args[1:])
 	}
 	_, _ = fmt.Fprintln(e.stderr, machineUsage)
 	return 2
@@ -44,6 +46,18 @@ func cmdMachineRemove(e env, args []string) int {
 	}
 	if err := setup.RemoveMachine(setup.NewPrompter(e.stdin, e.stdout), e.home, args[0]); err != nil {
 		_, _ = fmt.Fprintf(e.stderr, "agent-downlink machine remove: %v\n", err)
+		return 1
+	}
+	return 0
+}
+
+func cmdMachineList(e env, args []string) int {
+	if len(args) != 0 {
+		_, _ = fmt.Fprintln(e.stderr, "usage: agent-downlink machine list")
+		return 2
+	}
+	if err := setup.ListMachines(e.stdout, e.home); err != nil {
+		_, _ = fmt.Fprintf(e.stderr, "agent-downlink machine list: %v\n", err)
 		return 1
 	}
 	return 0

@@ -114,3 +114,38 @@ func TestOldMachineSpellingsAreGone(t *testing.T) {
 		}
 	}
 }
+
+func TestMachineListTakesNoArguments(t *testing.T) {
+	e, _, stderr := testEnv(t)
+	if got := dispatch(e, []string{"machine", "list", "extra"}); got != 2 {
+		t.Errorf("exit status = %d, want 2", got)
+	}
+	if !strings.Contains(stderr.String(), "usage: agent-downlink machine list") {
+		t.Errorf("stderr = %q", stderr.String())
+	}
+}
+
+func TestMachineListReportsErrors(t *testing.T) {
+	e, _, stderr := testEnv(t)
+	if got := dispatch(e, []string{"machine", "list"}); got != 1 {
+		t.Errorf("exit status = %d, want 1", got)
+	}
+	if !strings.Contains(stderr.String(), "agent-downlink machine list: ") || !strings.Contains(stderr.String(), "agent-downlink setup") {
+		t.Errorf("stderr = %q", stderr.String())
+	}
+}
+
+func TestMachineListShowsReadableMachines(t *testing.T) {
+	e, stdout, stderr := setUpLaptop(t)
+	e.stdin = strings.NewReader("workstations-placeholder-password\n")
+	if got := dispatch(e, []string{"machine", "add", "workstation"}); got != 0 {
+		t.Fatalf("machine add: exit status = %d, stderr = %q", got, stderr.String())
+	}
+	stdout.Reset()
+	if got := dispatch(e, []string{"machine", "list"}); got != 0 {
+		t.Fatalf("machine list: exit status = %d, stderr = %q", got, stderr.String())
+	}
+	if want := "laptop (this machine)\nworkstation\n"; stdout.String() != want {
+		t.Errorf("stdout = %q, want %q", stdout.String(), want)
+	}
+}

@@ -115,14 +115,17 @@ data even briefly, which is why ADR-002 calls for it.
    machine's *existing* encryption password (so it replaces the same machine's area rather than
    starting a new one) — `setup` asks to confirm before replacing an existing configuration.
 3. Run `agent-downlink push` to send anything not yet uploaded.
-4. Delete the key you created in step 1. A key made with `b2 key create` does not appear on the
-   web console's App Keys page — that page only lists keys created there — so delete it the
-   same way it was made:
+4. Delete both keys now that the retirement key has taken over: the original key from section 2
+   and the retirement key from step 1. Leaving the original key alive defeats the point of
+   retiring the machine — it still has `writeFiles` on the whole bucket. Neither key appears on
+   the web console's App Keys page — that page only lists keys created there — so delete both
+   the same way they were made:
 
    ```sh
    export B2_ACCOUNT_INFO="$(mktemp -d)/account_info"
    b2 account authorize
-   b2 key delete <key ID>
+   b2 key delete <original key ID>
+   b2 key delete <retirement key ID>
    rm -rf "$(dirname "$B2_ACCOUNT_INFO")"
    ```
 

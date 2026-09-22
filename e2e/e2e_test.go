@@ -40,7 +40,7 @@ func newMachine(t *testing.T, name, bucket string, key config.B2, passwords map[
 	t.Helper()
 	home := t.TempDir()
 	paths := config.PathsFor(home)
-	obscurer, err := rclone.New("", "/unused")
+	obscurer, err := rclone.New("", "/unused", rclone.Concurrency{})
 	if err != nil {
 		t.Fatalf("the suite needs rclone: %v", err)
 	}
@@ -57,7 +57,7 @@ func newMachine(t *testing.T, name, bucket string, key config.B2, passwords map[
 	if err := conf.Save(paths.RcloneConf, "b2:"+bucket); err != nil {
 		t.Fatal(err)
 	}
-	runner, err := rclone.New("", paths.RcloneConf)
+	runner, err := rclone.New("", paths.RcloneConf, rclone.Concurrency{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +108,7 @@ func mustSucceed(t *testing.T, m *machine, ok bool) {
 // included: a test probe of the provider's versioning, not something the tool does.
 func storedVersions(t *testing.T, m *machine, bucket string) int {
 	t.Helper()
-	runner, err := rclone.New("", m.paths.RcloneConf)
+	runner, err := rclone.New("", m.paths.RcloneConf, rclone.Concurrency{})
 	if err != nil {
 		t.Fatal(err)
 	}

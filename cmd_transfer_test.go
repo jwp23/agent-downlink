@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,7 +20,7 @@ func configuredEnv(t *testing.T, machine, bucket string, readable ...string) (en
 	e, stdout, stderr := testEnv(t)
 	paths := config.PathsFor(e.home)
 
-	obscurer, err := rclone.New("", "/unused")
+	obscurer, err := rclone.New("", "/unused", rclone.Concurrency{})
 	if err != nil {
 		t.Fatalf("integration tests need rclone: %v", err)
 	}
@@ -182,6 +183,100 @@ func TestStartupFailureClearsAfterRecovery(t *testing.T) {
 	st, _ = status.Load(paths.StatusFile)
 	if st.Steps["startup"].Error != "" {
 		t.Errorf("status = %+v, want the startup failure cleared after recovery", st.Steps)
+	}
+}
+
+// recordingRclone writes a wrapper around the installed rclone that appends every argument it
+// is started with, one per line, to the log file it returns.
+func recordingRclone(t *testing.T, dir string) (wrapper, argLog string) {
+	t.Helper()
+	installed, err := rclone.New("", "/unused", rclone.Concurrency{}) // for the path of the real rclone
+	if err != nil {
+		t.Fatalf("integration tests need rclone: %v", err)
+	}
+	argLog = filepath.Join(dir, "args.log")
+	wrapper = filepath.Join(dir, "rclone-recording-args")
+	script := fmt.Sprintf("#!/bin/sh\nprintf '%%s\\n' \"$@\" >> %q\nexec %q \"$@\"\n", argLog, installed.Binary())
+	if err := os.WriteFile(wrapper, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	return wrapper, argLog
+}
+
+// useRclone points a configured machine at a particular rclone binary and copy parallelism.
+func useRclone(t *testing.T, e env, binary string, transfers, checkers int) {
+	t.Helper()
+	path := config.PathsFor(e.home).ConfigFile
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Rclone, cfg.Transfers, cfg.Checkers = binary, transfers, checkers
+	if err := cfg.Save(path); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPullTakesItsParallelismFromConfigAndTheFlagOverridesIt(t *testing.T) {
+	bucket := filepath.Join(t.TempDir(), "bucket")
+	lt, _, ltErr := configuredEnv(t, "laptop", bucket)
+	writeRecord(t, lt.home, "proj-b/s2.jsonl", "from laptop\n")
+	writeHistory(t, lt.home, "typed prompt history\n")
+	if got := dispatch(lt, []string{"push"}); got != 0 {
+		t.Fatalf("laptop push: exit %d, stderr %q", got, ltErr())
+	}
+
+	ws, _, wsErr := configuredEnv(t, "workstation", bucket, "laptop")
+	wrapper, argLog := recordingRclone(t, t.TempDir())
+	// Values no default would produce, so a pull that ignored config.toml would show up.
+	useRclone(t, ws, wrapper, 2, 3)
+
+	for _, tc := range []struct {
+		args          []string
+		wantTransfers string
+	}{
+		{[]string{"pull"}, "2"},
+		{[]string{"pull", "--transfers=7"}, "7"},
+		{[]string{"pull", "--transfers=0"}, "2"}, // zero keeps the configured value
+	} {
+		if err := os.Remove(argLog); err != nil && !os.IsNotExist(err) {
+			t.Fatal(err)
+		}
+		if got := dispatch(ws, tc.args); got != 0 {
+			t.Fatalf("%v: exit %d, stderr %q", tc.args, got, wsErr())
+		}
+		logged, err := os.ReadFile(argLog)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// checkers has no flag, so every pull uses the configured value.
+		for _, want := range []string{"--transfers\n" + tc.wantTransfers + "\n", "--checkers\n3\n"} {
+			if !strings.Contains(string(logged), want) {
+				t.Errorf("%v: rclone was not given %q:\n%s", tc.args, strings.TrimSuffix(want, "\n"), logged)
+			}
+		}
+	}
+}
+
+func TestPullRejectsAnUnusableTransfersFlag(t *testing.T) {
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"pull", "--transfers=nope"}, `invalid value "nope" for flag -transfers`},
+		{[]string{"pull", "--transfers=-1"}, "--transfers must be 1 or more"},
+		{[]string{"pull", "--transfers=2", "extra"}, "usage: agent-downlink pull [--transfers=N]"},
+	} {
+		e, stdout, stderr := testEnv(t)
+		if got := dispatch(e, tc.args); got != 2 {
+			t.Errorf("%v: exit status = %d, want 2", tc.args, got)
+		}
+		if !strings.Contains(stderr.String(), tc.want) {
+			t.Errorf("%v: stderr = %q, want it to contain %q", tc.args, stderr.String(), tc.want)
+		}
+		if stdout.String() != "" {
+			t.Errorf("%v: stdout = %q, want nothing", tc.args, stdout.String())
+		}
 	}
 }
 

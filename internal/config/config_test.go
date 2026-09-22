@@ -81,9 +81,51 @@ func TestSaveLeavesTheExistingFileUntouchedWhenItCannotBeReplaced(t *testing.T) 
 	}
 }
 
+// TestCopyParallelismIsOptional covers both halves of an optional setting: a file that leaves
+// it out stays free of it and loads, and a file that sets it round-trips.
+func TestCopyParallelismIsOptional(t *testing.T) {
+	dir := t.TempDir()
+	unset := filepath.Join(dir, "unset.toml")
+	if err := validFile().Save(unset); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(unset)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{"transfers", "checkers"} {
+		if strings.Contains(string(b), field+" =") {
+			t.Errorf("unset %q was written to config.toml:\n%s", field, b)
+		}
+	}
+	got, err := Load(unset)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Transfers != 0 || got.Checkers != 0 {
+		t.Errorf("Load = transfers %d, checkers %d; want both unset", got.Transfers, got.Checkers)
+	}
+
+	set := filepath.Join(dir, "set.toml")
+	f := validFile()
+	f.Transfers, f.Checkers = 16, 32
+	if err := f.Save(set); err != nil {
+		t.Fatal(err)
+	}
+	got, err = Load(set)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Transfers != 16 || got.Checkers != 32 {
+		t.Errorf("Load = transfers %d, checkers %d; want 16 and 32", got.Transfers, got.Checkers)
+	}
+}
+
 func TestSavedFileExplainsEveryField(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.toml")
-	if err := validFile().Save(path); err != nil {
+	f := validFile()
+	f.Transfers, f.Checkers = 16, 32 // optional fields, absent from a file that leaves them out
+	if err := f.Save(path); err != nil {
 		t.Fatal(err)
 	}
 	b, err := os.ReadFile(path)
@@ -91,7 +133,7 @@ func TestSavedFileExplainsEveryField(t *testing.T) {
 		t.Fatal(err)
 	}
 	lines := strings.Split(string(b), "\n")
-	for _, field := range []string{"machine", "storage", "mirror", "rclone", "tools"} {
+	for _, field := range []string{"machine", "storage", "mirror", "rclone", "tools", "transfers", "checkers"} {
 		found := false
 		for i, line := range lines {
 			if strings.HasPrefix(line, field+" =") {
@@ -132,6 +174,8 @@ func TestValidate(t *testing.T) {
 		"storage with no bucket": {func(f *File) { f.Storage = "b2:" }, "bucket name"},
 		"relative mirror":        {func(f *File) { f.Mirror = "mirror" }, "mirror must be an absolute path"},
 		"relative rclone":        {func(f *File) { f.Rclone = "rclone" }, "rclone must be an absolute path"},
+		"negative transfers":     {func(f *File) { f.Transfers = -1 }, "transfers must be 1 or more"},
+		"negative checkers":      {func(f *File) { f.Checkers = -1 }, "checkers must be 1 or more"},
 		"unknown tool":           {func(f *File) { f.Tools = []string{"nonesuch"} }, `unknown tool "nonesuch"`},
 		"custom shadows builtin": {func(f *File) { f.CustomTools = []CustomTool{{Name: "claude-code", Root: "/x", Paths: []string{"a"}}} }, "built in"},
 		"duplicate custom tool name": {func(f *File) {

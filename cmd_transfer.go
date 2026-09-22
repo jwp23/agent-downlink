@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"io"
 	"time"
@@ -14,31 +15,59 @@ import (
 )
 
 func cmdRun(e env, args []string) int {
-	return runCycle(e, "run", args, true, (*transfer.Cycle).Run)
+	if !noArgs(e, "run", args) {
+		return 2
+	}
+	return runCycle(e, "run", true, 0, (*transfer.Cycle).Run)
 }
 
 func cmdPush(e env, args []string) int {
-	return runCycle(e, "push", args, false, (*transfer.Cycle).Push)
+	if !noArgs(e, "push", args) {
+		return 2
+	}
+	return runCycle(e, "push", false, 0, (*transfer.Cycle).Push)
 }
 
+// cmdPull takes --transfers=N to tune one pull without editing config.toml.
 func cmdPull(e env, args []string) int {
-	return runCycle(e, "pull", args, false, (*transfer.Cycle).Pull)
+	flags := flag.NewFlagSet("agent-downlink pull", flag.ContinueOnError)
+	flags.SetOutput(e.stderr)
+	transfers := flags.Int("transfers", 0, "files to copy at the same time; 0 keeps the value from config.toml")
+	if err := flags.Parse(args); err != nil {
+		return 2
+	}
+	if flags.NArg() != 0 {
+		_, _ = fmt.Fprintln(e.stderr, "usage: agent-downlink pull [--transfers=N]")
+		return 2
+	}
+	if *transfers < 0 {
+		_, _ = fmt.Fprintf(e.stderr, "agent-downlink pull: --transfers must be 1 or more; 0 keeps the value from config.toml, got %d\n", *transfers)
+		return 2
+	}
+	return runCycle(e, "pull", false, *transfers, (*transfer.Cycle).Pull)
+}
+
+// noArgs reports whether a command that takes no arguments was given none, printing its usage
+// line when it was given some.
+func noArgs(e env, name string, args []string) bool {
+	if len(args) != 0 {
+		_, _ = fmt.Fprintf(e.stderr, "usage: agent-downlink %s\n", name)
+		return false
+	}
+	return true
 }
 
 // runCycle is everything the three transfer commands share. quietWhenBusy is for the timer:
-// an hourly run that overlaps a long one is normal and says nothing.
-func runCycle(e env, name string, args []string, quietWhenBusy bool, steps func(*transfer.Cycle, context.Context) bool) int {
-	if len(args) != 0 {
-		_, _ = fmt.Fprintf(e.stderr, "usage: agent-downlink %s\n", name)
-		return 2
-	}
+// an hourly run that overlaps a long one is normal and says nothing. A non-zero transfers
+// overrides config.toml's copy parallelism for this run alone.
+func runCycle(e env, name string, quietWhenBusy bool, transfers int, steps func(*transfer.Cycle, context.Context) bool) int {
 	paths := config.PathsFor(e.home)
 	errors := io.Discard
 	if e.interactive {
 		errors = e.stderr
 	}
 
-	cycle, err := loadCycle(e.home, paths, errors)
+	cycle, err := loadCycle(e.home, paths, errors, transfers)
 	if err != nil {
 		_, _ = fmt.Fprintf(errors, "agent-downlink %s: %v\n", name, err)
 		recordStartupFailure(paths, err)
@@ -94,7 +123,7 @@ func recordStartupSuccess(paths config.Paths) {
 	_ = st.Save(paths.StatusFile)
 }
 
-func loadCycle(home string, paths config.Paths, errors io.Writer) (*transfer.Cycle, error) {
+func loadCycle(home string, paths config.Paths, errors io.Writer, transfers int) (*transfer.Cycle, error) {
 	if err := config.CheckPermissions(paths); err != nil {
 		return nil, err
 	}
@@ -110,7 +139,11 @@ func loadCycle(home string, paths config.Paths, errors io.Writer) (*transfer.Cyc
 	if err != nil {
 		return nil, err
 	}
-	runner, err := rclone.New(cfg.Rclone, paths.RcloneConf)
+	concurrency := rclone.Concurrency{Transfers: cfg.Transfers, Checkers: cfg.Checkers}
+	if transfers != 0 {
+		concurrency.Transfers = transfers
+	}
+	runner, err := rclone.New(cfg.Rclone, paths.RcloneConf, concurrency)
 	if err != nil {
 		return nil, err
 	}

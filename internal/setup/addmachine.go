@@ -27,7 +27,7 @@ func AddMachine(ctx context.Context, p *Prompter, home, machine string) error {
 	if err != nil {
 		return err
 	}
-	runner, err := rclone.New(cfg.Rclone, paths.RcloneConf)
+	runner, err := rclone.New(cfg.Rclone, paths.RcloneConf, rclone.Concurrency{}) // add-machine only obscures a password
 	if err != nil {
 		return err
 	}

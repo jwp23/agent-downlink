@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 )
 
@@ -19,14 +20,41 @@ var ErrNotInstalled = errors.New("rclone is not installed or could not be found;
 // configFlag names rclone's config file flag, common to every invocation the Runner makes.
 const configFlag = "--config"
 
+// rclone's own defaults, used for a field left unset. They are not raised here: a B2 upload
+// holds up to --transfers times --b2-upload-concurrency chunks in memory, so a faster
+// transfer is a deliberate trade the operator makes against the memory it costs.
+const (
+	defaultTransfers = 4
+	defaultCheckers  = 8
+)
+
+// Concurrency is how much of a copy rclone runs at once. A zero field means rclone's own
+// default for it.
+type Concurrency struct {
+	Transfers int // files copied at the same time
+	Checkers  int // files compared at the same time to decide what to copy
+}
+
+// orDefault fills in rclone's default for every field left unset.
+func (c Concurrency) orDefault() Concurrency {
+	if c.Transfers == 0 {
+		c.Transfers = defaultTransfers
+	}
+	if c.Checkers == 0 {
+		c.Checkers = defaultCheckers
+	}
+	return c
+}
+
 // Runner runs rclone against the tool's own rclone.conf, never the user's.
 type Runner struct {
-	binary     string
-	configPath string
+	binary      string
+	configPath  string
+	concurrency Concurrency
 }
 
 // New finds rclone. An empty binary means search PATH.
-func New(binary, configPath string) (*Runner, error) {
+func New(binary, configPath string, concurrency Concurrency) (*Runner, error) {
 	if binary == "" {
 		found, err := exec.LookPath("rclone")
 		if err != nil {
@@ -36,25 +64,27 @@ func New(binary, configPath string) (*Runner, error) {
 	} else if _, err := os.Stat(binary); err != nil {
 		return nil, fmt.Errorf("%w (looked for %s)", ErrNotInstalled, binary)
 	}
-	return &Runner{binary: binary, configPath: configPath}, nil
+	return &Runner{binary: binary, configPath: configPath, concurrency: concurrency}, nil
 }
 
 // Binary is the path of the rclone in use.
 func (r *Runner) Binary() string { return r.binary }
 
-func copyArgs(configPath, src, dst string) []string {
+func copyArgs(configPath string, concurrency Concurrency, src, dst string) []string {
+	c := concurrency.orDefault()
 	return []string{
 		configFlag, configPath, "copy",
 		"--use-json-log", "--skip-links",
 		// Fail fast when offline; the hourly timer is the retry loop.
 		"--contimeout", "15s", "--retries", "1", "--low-level-retries", "3",
+		"--transfers", strconv.Itoa(c.Transfers), "--checkers", strconv.Itoa(c.Checkers),
 		src, dst,
 	}
 }
 
 // Copy runs "rclone copy", which never deletes anything at the destination.
 func (r *Runner) Copy(ctx context.Context, src, dst string) Result {
-	cmd := exec.CommandContext(ctx, r.binary, copyArgs(r.configPath, src, dst)...)
+	cmd := exec.CommandContext(ctx, r.binary, copyArgs(r.configPath, r.concurrency, src, dst)...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	err := cmd.Run()

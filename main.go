@@ -17,7 +17,7 @@ Commands:
   add-machine <name>     Make another machine's records readable here
   run                    Full cycle: copy local records, push, pull (what the timer runs)
   push                   Copy local records into the mirror and push them
-  pull                   Pull every other readable machine into the mirror
+  pull [--transfers=N]   Pull every other readable machine into the mirror
   status                 Show the age of each step's last success and any current error
   timer install|remove   Install or remove the hourly schedule
   help                   Show this text

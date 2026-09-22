@@ -39,6 +39,9 @@ go install github.com/jwp23/agent-downlink@latest
 5. On a second machine, run `agent-downlink setup` there too, then
    `agent-downlink add-machine <first machine's name>` with that machine's encryption password.
    The next run pulls its records into the mirror.
+6. To stop reading a machine there, run `agent-downlink remove-machine <its name>`. After you
+   confirm, it forgets that machine's password and status and deletes its mirror folder. Its
+   records in the bucket are untouched.
 
 ## Commands
 

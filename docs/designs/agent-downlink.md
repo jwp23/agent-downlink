@@ -86,7 +86,7 @@ the session ran.
 | `agent-downlink add-machine <name>` | On a reader. Takes another machine's encryption password and makes that machine readable here. |
 | `agent-downlink run` | What the timer invokes: the full cycle below. |
 | `agent-downlink push` | The cycle's local-copy and push steps, on demand. |
-| `agent-downlink pull` | The cycle's pull step, on demand. |
+| `agent-downlink pull [--transfers=N]` | The cycle's pull step, on demand. `--transfers=N` overrides the configured copy parallelism for this pull alone, for tuning one pull without editing `config.toml`. |
 | `agent-downlink timer install` / `timer remove` | Install or remove the hourly schedule on its own: for a machine set up without it, or one being retired. |
 | `agent-downlink status` | Age of each machine's last successful push and pull, the most recent error of any failing step, and the path of the log file. |
 
@@ -124,6 +124,8 @@ rather than a failure, and the next run copies it.
 | `mirror` | The mirror directory. |
 | `rclone` | Absolute path of the rclone binary, found by `setup`. Schedulers run jobs with a minimal `PATH` that may not include the directory rclone was installed to. |
 | `tools` | Names of the built-in tools to archive. `setup` writes `["claude-code"]`. The list is explicit so that a tool built in later is not switched on by an upgrade. |
+| `transfers` | Optional. Files rclone copies at the same time. Omitted means rclone's own default of 4. Raising it shortens a pull that moves many files; a B2 upload holds up to `transfers` times `--b2-upload-concurrency` chunks in memory, so the trade is deliberate. |
+| `checkers` | Optional. Files rclone compares at the same time to decide what to copy. Omitted means rclone's own default of 8. |
 | `[[custom_tools]]` | Optional. A tool that is not built in: `name`, `root` (absolute path of its data directory), `paths` (sub-paths of `root` to archive), and optionally `plugin_manifest` (a file under `root` to keep a timeline of). |
 
 Each archived path is copied to `mirror/<machine>/<tool>/<path>`.

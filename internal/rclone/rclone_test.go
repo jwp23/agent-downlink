@@ -15,11 +15,28 @@ import (
 // than skip, when rclone is absent: a green run must mean the encryption path was exercised.
 func realRunner(t *testing.T, configPath string) *Runner {
 	t.Helper()
-	r, err := New("", configPath)
+	r, err := New("", configPath, Concurrency{})
 	if err != nil {
 		t.Fatalf("integration tests need rclone: %v", err)
 	}
 	return r
+}
+
+// recordingRclone writes a wrapper around the installed rclone that appends every argument it
+// is started with, one per line, to the log file it returns.
+func recordingRclone(t *testing.T, dir string) (wrapper, argLog string) {
+	t.Helper()
+	rcloneBinary, err := exec.LookPath("rclone")
+	if err != nil {
+		t.Fatalf("integration tests need rclone: %v", err)
+	}
+	argLog = filepath.Join(dir, "args.log")
+	wrapper = filepath.Join(dir, "rclone-recording-args")
+	script := fmt.Sprintf("#!/bin/sh\nprintf '%%s\\n' \"$@\" >> %q\nexec %q \"$@\"\n", argLog, rcloneBinary)
+	if err := os.WriteFile(wrapper, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	return wrapper, argLog
 }
 
 // writeCryptConf writes an rclone.conf with one crypt remote over a local directory.
@@ -50,14 +67,14 @@ func writeFile(t *testing.T, path, content string) {
 
 func TestNewFailsClearlyWhenRcloneIsAbsent(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
-	_, err := New("", "/unused")
+	_, err := New("", "/unused", Concurrency{})
 	if !errors.Is(err, ErrNotInstalled) {
 		t.Fatalf("New = %v, want ErrNotInstalled", err)
 	}
 	if !strings.Contains(err.Error(), "https://rclone.org/install/") {
 		t.Errorf("error = %q, want it to say where to get rclone", err)
 	}
-	if _, err := New(filepath.Join(t.TempDir(), "no-such-rclone"), "/unused"); !errors.Is(err, ErrNotInstalled) {
+	if _, err := New(filepath.Join(t.TempDir(), "no-such-rclone"), "/unused", Concurrency{}); !errors.Is(err, ErrNotInstalled) {
 		t.Errorf("New with a missing explicit binary = %v, want ErrNotInstalled", err)
 	}
 }
@@ -167,30 +184,46 @@ func TestCopySkipsSymlinksQuietly(t *testing.T) {
 	}
 }
 
+// TestCopyPassesTheEffectiveConcurrencyToRclone proves the value a Runner was built with
+// reaches the process, not just the argument list copyArgs returns.
+func TestCopyPassesTheEffectiveConcurrencyToRclone(t *testing.T) {
+	dir := t.TempDir()
+	wrapper, argLog := recordingRclone(t, dir)
+	confPath, _ := writeCryptConf(t, realRunner(t, "/unused"), dir, "workstation", "placeholder-password")
+	r, err := New(wrapper, confPath, Concurrency{Transfers: 2, Checkers: 3})
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(dir, "src", "a.jsonl"), "x\n")
+	if res := r.Copy(context.Background(), filepath.Join(dir, "src"), filepath.Join(dir, "dst")); res.Outcome != Success {
+		t.Fatalf("Copy = %+v", res)
+	}
+	logged, err := os.ReadFile(argLog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"--transfers\n2\n", "--checkers\n3\n"} {
+		if !strings.Contains(string(logged), want) {
+			t.Errorf("rclone was not given %q:\n%s", strings.TrimSuffix(want, "\n"), logged)
+		}
+	}
+}
+
 // TestSecretsNeverReachAProcessArgument runs real rclone through a wrapper that records every
 // argument it is started with. Other users on a machine can read process arguments.
 func TestSecretsNeverReachAProcessArgument(t *testing.T) {
-	rcloneBinary, err := exec.LookPath("rclone")
-	if err != nil {
-		t.Fatalf("integration tests need rclone: %v", err)
-	}
 	dir := t.TempDir()
-	argLog := filepath.Join(dir, "args.log")
-	wrapper := filepath.Join(dir, "rclone-recording-args")
-	script := fmt.Sprintf("#!/bin/sh\nprintf '%%s\\n' \"$@\" >> %q\nexec %q \"$@\"\n", argLog, rcloneBinary)
-	if err := os.WriteFile(wrapper, []byte(script), 0o700); err != nil {
-		t.Fatal(err)
-	}
+	wrapper, argLog := recordingRclone(t, dir)
 
 	const password = "placeholder-password-that-must-stay-off-argv"
-	recording, err := New(wrapper, "/unused")
+	recording, err := New(wrapper, "/unused", Concurrency{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	confPath, _ := writeCryptConf(t, recording, dir, "workstation", password)
 	obscured, _ := recording.Obscure(context.Background(), password)
 
-	r, err := New(wrapper, confPath)
+	r, err := New(wrapper, confPath, Concurrency{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -219,7 +252,7 @@ func TestObscureErrorDoesNotRevealTheSecret(t *testing.T) {
 	if err := os.WriteFile(failing, []byte("#!/bin/sh\nexit 1\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	r, err := New(failing, "/unused")
+	r, err := New(failing, "/unused", Concurrency{})
 	if err != nil {
 		t.Fatal(err)
 	}

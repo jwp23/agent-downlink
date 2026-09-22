@@ -35,7 +35,7 @@ func newMachines(t *testing.T, names []string, neverPushes ...string) (bucket st
 	ctx := context.Background()
 	bucket = filepath.Join(t.TempDir(), "bucket")
 
-	obscurer, err := rclone.New("", "/unused")
+	obscurer, err := rclone.New("", "/unused", rclone.Concurrency{})
 	if err != nil {
 		t.Fatalf("integration tests need rclone: %v", err)
 	}
@@ -55,7 +55,7 @@ func newMachines(t *testing.T, names []string, neverPushes ...string) (bucket st
 		if err := (config.RcloneConf{Passwords: passwords}).Save(paths.RcloneConf, bucket); err != nil {
 			t.Fatal(err)
 		}
-		runner, err := rclone.New("", paths.RcloneConf)
+		runner, err := rclone.New("", paths.RcloneConf, rclone.Concurrency{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -402,7 +402,7 @@ func TestPullTightensAnExistingLooseMirror(t *testing.T) {
 	if err := os.MkdirAll(mirror, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	runner, err := rclone.New("", filepath.Join(dir, "rclone.conf"))
+	runner, err := rclone.New("", filepath.Join(dir, "rclone.conf"), rclone.Concurrency{})
 	if err != nil {
 		t.Fatalf("integration tests need rclone: %v", err)
 	}
@@ -566,7 +566,7 @@ func TestLocalCopyPutsAFileSourceAtItsMirrorPathNotADirectory(t *testing.T) {
 	write(t, filepath.Join(root, "projects", "proj-a", "s1.jsonl"), "from workstation\n")
 	write(t, filepath.Join(root, "history.jsonl"), "typed prompt history\n")
 
-	runner, err := rclone.New("", filepath.Join(dir, "rclone.conf"))
+	runner, err := rclone.New("", filepath.Join(dir, "rclone.conf"), rclone.Concurrency{})
 	if err != nil {
 		t.Fatalf("integration tests need rclone: %v", err)
 	}

@@ -25,6 +25,8 @@ type File struct {
 	Mirror      string       `toml:"mirror" comment:"Directory holding the decrypted mirror of every readable machine. Move it to an encrypted volume if you have one."`
 	Rclone      string       `toml:"rclone" comment:"Absolute path of the rclone binary. Schedulers run with a minimal PATH. Empty means search PATH."`
 	Tools       []string     `toml:"tools" comment:"Built-in agent tools whose records are archived from this machine."`
+	Transfers   int          `toml:"transfers,omitempty" comment:"Files rclone copies at the same time. Omit for rclone's default of 4."`
+	Checkers    int          `toml:"checkers,omitempty" comment:"Files rclone compares at the same time to decide what to copy. Omit for rclone's default of 8."`
 	CustomTools []CustomTool `toml:"custom_tools,omitempty" comment:"Agent tools that are not built in."`
 }
 
@@ -59,6 +61,13 @@ func (f File) Validate() error {
 	}
 	if f.Rclone != "" && !filepath.IsAbs(f.Rclone) {
 		return fmt.Errorf("rclone must be an absolute path or empty, got %q", f.Rclone)
+	}
+	// Zero is how an omitted field arrives, and means rclone's own default.
+	if f.Transfers < 0 {
+		return fmt.Errorf("transfers must be 1 or more, or omitted for rclone's default, got %d", f.Transfers)
+	}
+	if f.Checkers < 0 {
+		return fmt.Errorf("checkers must be 1 or more, or omitted for rclone's default, got %d", f.Checkers)
 	}
 	return validateToolNames(f.Tools, f.CustomTools)
 }

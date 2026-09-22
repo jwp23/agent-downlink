@@ -28,7 +28,7 @@ var errCancelled = errors.New("cancelled; nothing was changed")
 // configuration files, and installs the hourly schedule.
 func Run(ctx context.Context, p *Prompter, o Options) error {
 	paths := config.PathsFor(o.Home)
-	runner, err := rclone.New("", paths.RcloneConf)
+	runner, err := rclone.New("", paths.RcloneConf, rclone.Concurrency{}) // setup only obscures a password
 	if err != nil {
 		return err
 	}

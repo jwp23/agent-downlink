@@ -18,15 +18,27 @@ func fixture(t *testing.T, name string) []byte {
 }
 
 func TestCopyArgs(t *testing.T) {
-	got := copyArgs("/cfg/rclone.conf", "/src", "crypt-workstation:")
-	want := []string{
-		"--config", "/cfg/rclone.conf", "copy",
-		"--use-json-log", "--skip-links",
-		"--contimeout", "15s", "--retries", "1", "--low-level-retries", "3",
-		"/src", "crypt-workstation:",
+	cases := map[string]struct {
+		concurrency         Concurrency
+		transfers, checkers string
+	}{
+		"unset falls back to rclone's own defaults": {Concurrency{}, "4", "8"},
+		"both configured":           {Concurrency{Transfers: 16, Checkers: 32}, "16", "32"},
+		"only transfers configured": {Concurrency{Transfers: 16}, "16", "8"},
+		"only checkers configured":  {Concurrency{Checkers: 32}, "4", "32"},
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("copyArgs = %q\nwant %q", got, want)
+	for name, tc := range cases {
+		got := copyArgs("/cfg/rclone.conf", tc.concurrency, "/src", "crypt-workstation:")
+		want := []string{
+			"--config", "/cfg/rclone.conf", "copy",
+			"--use-json-log", "--skip-links",
+			"--contimeout", "15s", "--retries", "1", "--low-level-retries", "3",
+			"--transfers", tc.transfers, "--checkers", tc.checkers,
+			"/src", "crypt-workstation:",
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("%s: copyArgs = %q\nwant %q", name, got, want)
+		}
 	}
 }
 

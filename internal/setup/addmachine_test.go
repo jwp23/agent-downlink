@@ -17,7 +17,7 @@ func configured(t *testing.T, machine, bucket, password string) (home string, ru
 	t.Helper()
 	home = t.TempDir()
 	paths := config.PathsFor(home)
-	obscurer, err := rclone.New("", "/unused")
+	obscurer, err := rclone.New("", "/unused", rclone.Concurrency{})
 	if err != nil {
 		t.Fatalf("integration tests need rclone: %v", err)
 	}
@@ -32,7 +32,7 @@ func configured(t *testing.T, machine, bucket, password string) (home string, ru
 	if err := (config.RcloneConf{Passwords: map[string]string{machine: obscured}}).Save(paths.RcloneConf, bucket); err != nil {
 		t.Fatal(err)
 	}
-	runner, err = rclone.New("", paths.RcloneConf)
+	runner, err = rclone.New("", paths.RcloneConf, rclone.Concurrency{})
 	if err != nil {
 		t.Fatal(err)
 	}

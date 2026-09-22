@@ -67,13 +67,6 @@ func runCycle(e env, name string, quietWhenBusy bool, transfers int, steps func(
 		errors = e.stderr
 	}
 
-	cycle, err := loadCycle(e.home, paths, errors, transfers)
-	if err != nil {
-		_, _ = fmt.Fprintf(errors, "agent-downlink %s: %v\n", name, err)
-		recordStartupFailure(paths, err)
-		return 1
-	}
-
 	release, acquired, err := transfer.Lock(paths.LockFile)
 	if err != nil {
 		_, _ = fmt.Fprintf(errors, "agent-downlink %s: %v\n", name, err)
@@ -88,6 +81,13 @@ func runCycle(e env, name string, quietWhenBusy bool, transfers int, steps func(
 		return 1
 	}
 	defer release()
+
+	cycle, err := loadCycle(e.home, paths, errors, transfers)
+	if err != nil {
+		_, _ = fmt.Fprintf(errors, "agent-downlink %s: %v\n", name, err)
+		recordStartupFailure(paths, err)
+		return 1
+	}
 
 	recordStartupSuccess(paths)
 	if !steps(cycle, context.Background()) {

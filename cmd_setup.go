@@ -51,3 +51,15 @@ func cmdAddMachine(e env, args []string) int {
 	}
 	return 0
 }
+
+func cmdRemoveMachine(e env, args []string) int {
+	if len(args) != 1 {
+		_, _ = fmt.Fprintln(e.stderr, "usage: agent-downlink remove-machine <name>")
+		return 2
+	}
+	if err := setup.RemoveMachine(setup.NewPrompter(e.stdin, e.stdout), e.home, args[0]); err != nil {
+		_, _ = fmt.Fprintf(e.stderr, "agent-downlink remove-machine: %v\n", err)
+		return 1
+	}
+	return 0
+}

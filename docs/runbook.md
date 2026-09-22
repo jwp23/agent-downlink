@@ -99,6 +99,11 @@ On the machine that should be able to read another machine's records:
 3. The next `agent-downlink run` (or `agent-downlink pull`) pulls `<machine>`'s records into the
    mirror. Check with `agent-downlink status`.
 
+To stop reading a machine here, run `agent-downlink remove-machine <machine>`. After you
+confirm, it forgets the machine's password and status on this machine and deletes its mirror
+folder. The machine's area in the bucket stays; deleting that is done by hand in the web
+console, if ever, after section 5.
+
 ## 5. Retire a machine
 
 A B2 application key restricted to the file-name prefix `<machine>/` pushes correctly with
@@ -144,6 +149,8 @@ data even briefly, which is why ADR-002 calls for it.
    3.x releases spell this `b2 delete-key`. Confirm against what you have installed with
    `b2 key delete --help`.
 5. If this machine ever had the hourly timer installed, run `agent-downlink timer remove`.
+6. On each reader that should no longer keep a copy, run `agent-downlink remove-machine
+   <machine>` (section 4).
 
 ## 6. A machine is lost or stolen
 

@@ -15,6 +15,7 @@ const usage = `Usage: agent-downlink <command>
 Commands:
   setup [--no-timer]     Configure this machine and install the hourly timer
   add-machine <name>     Make another machine's records readable here
+  remove-machine <name>  Stop reading another machine here and delete its mirror folder
   run                    Full cycle: copy local records, push, pull (what the timer runs)
   push                   Copy local records into the mirror and push them
   pull [--transfers=N]   Pull every other readable machine into the mirror
@@ -36,13 +37,14 @@ type env struct {
 type command func(e env, args []string) int
 
 var commands = map[string]command{
-	"setup":       cmdSetup,
-	"add-machine": cmdAddMachine,
-	"run":         cmdRun,
-	"push":        cmdPush,
-	"pull":        cmdPull,
-	"status":      cmdStatus,
-	"timer":       cmdTimer,
+	"setup":          cmdSetup,
+	"add-machine":    cmdAddMachine,
+	"remove-machine": cmdRemoveMachine,
+	"run":            cmdRun,
+	"push":           cmdPush,
+	"pull":           cmdPull,
+	"status":         cmdStatus,
+	"timer":          cmdTimer,
 }
 
 func main() {

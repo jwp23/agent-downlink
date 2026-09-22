@@ -115,13 +115,47 @@ data even briefly, which is why ADR-002 calls for it.
    machine's *existing* encryption password (so it replaces the same machine's area rather than
    starting a new one) — `setup` asks to confirm before replacing an existing configuration.
 3. Run `agent-downlink push` to send anything not yet uploaded.
-4. Delete the key you created in step 1 from the B2 web console.
+4. Delete both keys now that the retirement key has taken over: the original key from section 2
+   and the retirement key from step 1. Leaving the original key alive defeats the point of
+   retiring the machine — it still has `writeFiles` on the whole bucket. Neither key appears on
+   the web console's App Keys page — that page only lists keys created there — so delete both
+   the same way they were made:
+
+   ```sh
+   (
+     set -e
+     tmpdir="$(mktemp -d)"
+     trap 'rm -rf "$tmpdir"' 0
+     export B2_ACCOUNT_INFO="$tmpdir/account_info"
+     b2 account authorize
+     b2 key delete <original key ID>
+     b2 key delete <retirement key ID>
+   )
+   ```
+
+   3.x releases spell this `b2 delete-key`. Confirm against what you have installed with
+   `b2 key delete --help`.
 5. If this machine ever had the hourly timer installed, run `agent-downlink timer remove`.
 
 ## 6. A machine is lost or stolen
 
-1. In the B2 web console, delete that machine's storage key. Backblaze does not document how
-   quickly a deleted key stops working; ADR-002 plans for up to a day.
+1. Delete that machine's storage key. It was made with `b2 key create` (section 2), so it will
+   not appear on the web console's App Keys page — that page only lists keys created there —
+   delete it from the command line instead:
+
+   ```sh
+   (
+     set -e
+     tmpdir="$(mktemp -d)"
+     trap 'rm -rf "$tmpdir"' 0
+     export B2_ACCOUNT_INFO="$tmpdir/account_info"
+     b2 account authorize
+     b2 key delete <key ID>
+   )
+   ```
+
+   Backblaze does not document how quickly a deleted key stops working; ADR-002 plans for up to
+   a day.
 2. That machine's encryption password only ever protected its own area of the archive — it
    cannot be used to read any other machine's records.
 3. Full-disk encryption, if it was enabled on the lost machine, protects the mirror and the

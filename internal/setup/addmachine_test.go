@@ -92,7 +92,7 @@ func TestAddMachineMakesAnotherMachinesRecordsReadable(t *testing.T) {
 		t.Error("rclone.conf holds the password in plaintext")
 	}
 	if err := config.CheckPermissions(paths); err != nil {
-		t.Errorf("CheckPermissions after add-machine = %v", err)
+		t.Errorf("CheckPermissions after machine add = %v", err)
 	}
 	secrets, _ := config.LoadRcloneConf(paths.RcloneConf)
 	if len(secrets.Machines()) != 2 {

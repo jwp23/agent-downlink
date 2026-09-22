@@ -203,7 +203,7 @@ func report(p *Prompter, paths config.Paths, machine, password string, generated
 			"and without it this machine's records cannot be read by anyone.\n\n"+
 			"  Machine name:         %s\n  Encryption password:  %s\n", machine, password)
 	}
-	_, _ = fmt.Fprintf(p.out, "\nTo read this machine's records on another machine, run there:\n  agent-downlink add-machine %s\n", machine)
+	_, _ = fmt.Fprintf(p.out, "\nTo read this machine's records on another machine, run there:\n  agent-downlink machine add %s\n", machine)
 }
 
 func installSchedule(p *Prompter, o Options) error {

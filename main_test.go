@@ -48,7 +48,7 @@ func TestHelpPrintsUsageToStdoutAndExits0(t *testing.T) {
 }
 
 func TestEveryDocumentedCommandIsRegisteredAndInUsage(t *testing.T) {
-	for _, name := range []string{"setup", "add-machine", "remove-machine", "run", "push", "pull", "status", "timer"} {
+	for _, name := range []string{"setup", "machine", "run", "push", "pull", "status", "timer"} {
 		if _, ok := commands[name]; !ok {
 			t.Errorf("command %q is not registered", name)
 		}

@@ -122,11 +122,15 @@ data even briefly, which is why ADR-002 calls for it.
    the same way they were made:
 
    ```sh
-   export B2_ACCOUNT_INFO="$(mktemp -d)/account_info"
-   b2 account authorize
-   b2 key delete <original key ID>
-   b2 key delete <retirement key ID>
-   rm -rf "$(dirname "$B2_ACCOUNT_INFO")"
+   (
+     set -e
+     tmpdir="$(mktemp -d)"
+     trap 'rm -rf "$tmpdir"' 0
+     export B2_ACCOUNT_INFO="$tmpdir/account_info"
+     b2 account authorize
+     b2 key delete <original key ID>
+     b2 key delete <retirement key ID>
+   )
    ```
 
    3.x releases spell this `b2 delete-key`. Confirm against what you have installed with
@@ -140,10 +144,14 @@ data even briefly, which is why ADR-002 calls for it.
    delete it from the command line instead:
 
    ```sh
-   export B2_ACCOUNT_INFO="$(mktemp -d)/account_info"
-   b2 account authorize
-   b2 key delete <key ID>
-   rm -rf "$(dirname "$B2_ACCOUNT_INFO")"
+   (
+     set -e
+     tmpdir="$(mktemp -d)"
+     trap 'rm -rf "$tmpdir"' 0
+     export B2_ACCOUNT_INFO="$tmpdir/account_info"
+     b2 account authorize
+     b2 key delete <key ID>
+   )
    ```
 
    Backblaze does not document how quickly a deleted key stops working; ADR-002 plans for up to

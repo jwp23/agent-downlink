@@ -7,12 +7,17 @@ import (
 
 	"github.com/jwp23/agent-downlink/internal/config"
 	"github.com/jwp23/agent-downlink/internal/status"
+	"github.com/jwp23/agent-downlink/internal/transfer"
 )
 
 // RemoveMachine stops pulling another machine here: it forgets that machine's encryption
 // password and status, and deletes its folder from the local mirror. This is the one place
 // the tool deletes anything. The machine's area in the bucket is untouched; removing it is a
 // runbook procedure.
+//
+// It takes the same run lock as push, pull, and run, and holds it for the whole operation, so
+// a removal can never race a transfer's reads and writes of rclone.conf, status.json, and the
+// mirror.
 func RemoveMachine(p *Prompter, home, machine string) error {
 	if err := config.ValidateMachineName(machine); err != nil {
 		return err
@@ -21,6 +26,15 @@ func RemoveMachine(p *Prompter, home, machine string) error {
 	if err := config.CheckPermissions(paths); err != nil {
 		return err
 	}
+	release, acquired, err := transfer.Lock(paths.LockFile)
+	if err != nil {
+		return err
+	}
+	if !acquired {
+		return fmt.Errorf("a run is in progress; try again when it finishes")
+	}
+	defer release()
+
 	cfg, err := config.Load(paths.ConfigFile)
 	if err != nil {
 		return err
@@ -46,17 +60,17 @@ func RemoveMachine(p *Prompter, home, machine string) error {
 		return err
 	}
 
-	// The password goes first, so that a failure later on cannot leave the machine still
-	// being pulled.
-	delete(secrets.Passwords, machine)
-	if err := secrets.Save(paths.RcloneConf, cfg.Storage); err != nil {
-		return err
-	}
+	// The password goes last: if status.Save or os.RemoveAll fails, the password is still
+	// there, so a retry finds the machine "present" and can pick up where it left off.
 	delete(st.Steps, "pull:"+machine)
 	if err := st.Save(paths.StatusFile); err != nil {
 		return err
 	}
 	if err := os.RemoveAll(folder); err != nil {
+		return err
+	}
+	delete(secrets.Passwords, machine)
+	if err := secrets.Save(paths.RcloneConf, cfg.Storage); err != nil {
 		return err
 	}
 	_, _ = fmt.Fprintf(p.out, "%s is no longer readable here. Its area in the bucket, %s/%s, is untouched.\n", machine, cfg.Storage, machine)

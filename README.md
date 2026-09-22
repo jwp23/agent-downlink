@@ -80,11 +80,13 @@ Consumers may rely on the following:
 
 - The path is always `<machine>/<tool>/` followed by the tool's native layout, unmodified.
 - Every machine appears in the mirror as ordinary files, including the machine the mirror is
-  on. There are no symbolic links.
+  on, unless `remove-machine` has removed another machine's folder after confirmation. There
+  are no symbolic links.
 - The tool never removes or renames a file in a source directory or the bucket. Records the
-  agent later prunes from its own directory remain in the mirror and the bucket. The one
-  deletion the tool makes is `remove-machine`, which after confirmation removes another
-  machine's folder from the local mirror.
+  agent later prunes from its own directory remain in the bucket. They remain in the mirror
+  unless `remove-machine` removes that machine's folder after confirmation. The one deletion
+  the tool makes is `remove-machine`, which after confirmation removes another machine's
+  folder from the local mirror.
 - A file still being written by an agent may end in a partial line. A later run completes it.
 - Consumers read the mirror and never write to it.
 

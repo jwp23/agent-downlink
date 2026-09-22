@@ -16,7 +16,9 @@ Refuse these, or raise them with the operator, rather than building them:
 
 - No consumer features: no dashboards, transcript parsing, cross-tool schema, or scrubbing of
   records. The tool never imports or knows about a consumer.
-- No deletion, sync, or pruning of a source directory, the mirror, or the bucket.
+- No deletion, sync, or pruning of a source directory or the bucket. `remove-machine` is the
+  only exception: after confirmation, it removes another machine's folder from the local
+  mirror and refuses this machine's own name.
 - No automated provisioning of buckets, lifecycle rules, or storage keys. That is a runbook
   procedure, so no administrative credential ever rests on disk.
 - No server, daemon, staleness alerting, or tamper detection.

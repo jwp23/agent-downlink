@@ -46,6 +46,7 @@ go install github.com/jwp23/agent-downlink@latest
 |---|---|
 | `agent-downlink setup [--no-timer]` | Once per machine. Asks for a machine name, the bucket name, and the storage key, generates the machine's encryption password (or accepts an existing one, for a machine that replaces one of the same name), writes the config files, installs the hourly timer, and prints what to save in the password manager. `--no-timer` skips the timer, for a machine making a single push. |
 | `agent-downlink add-machine <name>` | On a reader. Takes another machine's encryption password and makes that machine readable here. |
+| `agent-downlink remove-machine <name>` | On a reader. After confirmation, forgets that machine's encryption password and status here and deletes its folder from the mirror, so it is no longer pulled. Never this machine's own name. The machine's area in the bucket is untouched. |
 | `agent-downlink run` | What the timer invokes: the full cycle below. |
 | `agent-downlink push` | The cycle's local-copy and push steps, on demand. |
 | `agent-downlink pull [--transfers=N]` | The cycle's pull step, on demand. `--transfers=N` overrides the configured copy parallelism for this pull alone, for tuning one pull without editing `config.toml`. |
@@ -80,8 +81,10 @@ Consumers may rely on the following:
 - The path is always `<machine>/<tool>/` followed by the tool's native layout, unmodified.
 - Every machine appears in the mirror as ordinary files, including the machine the mirror is
   on. There are no symbolic links.
-- This tool never removes or renames a file. Records the agent later prunes from its own
-  directory remain in the mirror and the bucket.
+- The tool never removes or renames a file in a source directory or the bucket. Records the
+  agent later prunes from its own directory remain in the mirror and the bucket. The one
+  deletion the tool makes is `remove-machine`, which after confirmation removes another
+  machine's folder from the local mirror.
 - A file still being written by an agent may end in a partial line. A later run completes it.
 - Consumers read the mirror and never write to it.
 

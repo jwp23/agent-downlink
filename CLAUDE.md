@@ -103,8 +103,9 @@ Each of these is a security or data-loss guardrail with no exceptions.
   placeholder machine names such as `workstation` and `laptop`.
 - **Secrets never reach a log, a process argument, or test output.** Other users on a machine
   can read a process's arguments.
-- **Nothing deletes.** Every transfer is `rclone copy`. No code path removes or renames a file
-  in a source directory, the mirror, or the bucket.
+- **Nothing deletes in a source directory or the bucket.** Every transfer is `rclone copy`. The
+  one deletion the tool makes is `remove-machine`, which after confirmation removes another
+  machine's folder from the local mirror; it refuses this machine's own name.
 - **The mirror layout is the public interface**: `<machine>/<tool>/<the tool's native tree>`.
   Changing it needs an ADR.
 - **Only `internal/rclone` executes rclone.** All other code goes through it.

@@ -15,7 +15,7 @@ func AddMachine(ctx context.Context, p *Prompter, home, machine string) error {
 	if err := config.ValidateMachineName(machine); err != nil {
 		return err
 	}
-	paths, cfg, secrets, err := loadReaderConfig(home)
+	paths, cfg, secrets, err := config.LoadChecked(home)
 	if err != nil {
 		return err
 	}

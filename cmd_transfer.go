@@ -82,7 +82,7 @@ func runCycle(e env, name string, quietWhenBusy bool, transfers int, steps func(
 	}
 	defer release()
 
-	cycle, err := loadCycle(e.home, paths, errors, transfers)
+	cycle, err := loadCycle(e.home, errors, transfers)
 	if err != nil {
 		_, _ = fmt.Fprintf(errors, "agent-downlink %s: %v\n", name, err)
 		recordStartupFailure(paths, err)
@@ -123,15 +123,8 @@ func recordStartupSuccess(paths config.Paths) {
 	_ = st.Save(paths.StatusFile)
 }
 
-func loadCycle(home string, paths config.Paths, errors io.Writer, transfers int) (*transfer.Cycle, error) {
-	if err := config.CheckPermissions(paths); err != nil {
-		return nil, err
-	}
-	cfg, err := config.Load(paths.ConfigFile)
-	if err != nil {
-		return nil, err
-	}
-	secrets, err := config.LoadRcloneConf(paths.RcloneConf)
+func loadCycle(home string, errors io.Writer, transfers int) (*transfer.Cycle, error) {
+	paths, cfg, secrets, err := config.LoadChecked(home)
 	if err != nil {
 		return nil, err
 	}

@@ -1,4 +1,4 @@
-// Package setup is the interactive setup and machine add flows.
+// Package setup is the interactive setup and machine add/machine remove flows, and machine list.
 package setup
 
 import (

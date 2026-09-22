@@ -101,6 +101,13 @@ func TestMachineRemoveSucceeds(t *testing.T) {
 	if !strings.Contains(stdout.String(), "workstation is no longer readable here") {
 		t.Errorf("stdout = %q", stdout.String())
 	}
+	stdout.Reset()
+	if got := dispatch(e, []string{"machine", "list"}); got != 0 {
+		t.Fatalf("machine list (after remove): exit status = %d, stderr = %q", got, stderr.String())
+	}
+	if want := "laptop (this machine)\n"; stdout.String() != want {
+		t.Errorf("stdout (after remove) = %q, want %q", stdout.String(), want)
+	}
 }
 
 func TestOldMachineSpellingsAreGone(t *testing.T) {
@@ -137,6 +144,14 @@ func TestMachineListReportsErrors(t *testing.T) {
 
 func TestMachineListShowsReadableMachines(t *testing.T) {
 	e, stdout, stderr := setUpLaptop(t)
+	stdout.Reset()
+	if got := dispatch(e, []string{"machine", "list"}); got != 0 {
+		t.Fatalf("machine list (before add): exit status = %d, stderr = %q", got, stderr.String())
+	}
+	if want := "laptop (this machine)\n"; stdout.String() != want {
+		t.Errorf("stdout (before add) = %q, want %q", stdout.String(), want)
+	}
+	stdout.Reset()
 	e.stdin = strings.NewReader("workstations-placeholder-password\n")
 	if got := dispatch(e, []string{"machine", "add", "workstation"}); got != 0 {
 		t.Fatalf("machine add: exit status = %d, stderr = %q", got, stderr.String())

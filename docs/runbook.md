@@ -45,10 +45,14 @@ unauthorized)`. `listBuckets` is not needed: a key scoped to one bucket carries 
 name and ID in its authorization response, which is where rclone reads them.
 
 ```sh
-export B2_ACCOUNT_INFO="$(mktemp -d)/account_info"
-b2 account authorize
-b2 key create --bucket <bucket> <machine> listFiles,readFiles,writeFiles
-rm -rf "$(dirname "$B2_ACCOUNT_INFO")"
+(
+  set -e
+  tmpdir="$(mktemp -d)"
+  trap 'rm -rf "$tmpdir"' 0
+  export B2_ACCOUNT_INFO="$tmpdir/account_info"
+  b2 account authorize
+  b2 key create --bucket <bucket> <machine> listFiles,readFiles,writeFiles
+)
 ```
 
 These are the `b2` tool's current noun-verb commands; 3.x releases spell them
@@ -106,10 +110,14 @@ data even briefly, which is why ADR-002 calls for it.
    as to the bucket. The trailing slash is what confines the key to that machine's area.
 
    ```sh
-   export B2_ACCOUNT_INFO="$(mktemp -d)/account_info"
-   b2 account authorize
-   b2 key create --bucket <bucket> --name-prefix <machine>/ <machine>-retire listFiles,readFiles,writeFiles
-   rm -rf "$(dirname "$B2_ACCOUNT_INFO")"
+   (
+     set -e
+     tmpdir="$(mktemp -d)"
+     trap 'rm -rf "$tmpdir"' 0
+     export B2_ACCOUNT_INFO="$tmpdir/account_info"
+     b2 account authorize
+     b2 key create --bucket <bucket> --name-prefix <machine>/ <machine>-retire listFiles,readFiles,writeFiles
+   )
    ```
 2. On the retiring machine, run `agent-downlink setup --no-timer`, giving that key and the
    machine's *existing* encryption password (so it replaces the same machine's area rather than

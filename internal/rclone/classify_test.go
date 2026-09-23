@@ -64,6 +64,13 @@ func TestClassify(t *testing.T) {
 		{"missing source directory", 3, fixture(t, "dir-not-found.jsonl"), Failure, []string{"directory not found"}},
 		{"unreachable storage", 1, fixture(t, "unreachable.jsonl"), Failure, []string{"CRITICAL: Failed to create file system", "connection refused"}},
 		{"a changing file alongside a real error is a failure", 6, append(fixture(t, "source-updated.jsonl"), []byte(`{"level":"error","msg":"Failed to copy: permission denied","object":"other.jsonl"}`+"\n")...), Failure, []string{"permission denied"}},
+		{"a notice line never counts as an error", 6, []byte(
+			`{"level":"notice","msg":"Removing partially written file on error","object":"big.jsonl.partial"}` + "\n" +
+				`{"level":"error","msg":"Failed to copy: can't copy - source file is being updated","object":"big.jsonl"}` + "\n"),
+			Warning, []string{"NOTICE: big.jsonl.partial: Removing partially written file on error"}},
+		{"a log line longer than 64 KiB is still read", 6, []byte(
+			`{"level":"error","msg":"Failed to copy: can't copy - source file is being updated ` + strings.Repeat("x", 100*1024) + `","object":"big.jsonl"}` + "\n"),
+			Warning, []string{"ERROR: big.jsonl: Failed to copy"}},
 		{"non-zero exit with no output", 2, nil, Failure, []string{"rclone exited with status 2"}},
 		{"output that is not JSON is kept as it is", 2, []byte("panic: something broke\n"), Failure, []string{"panic: something broke"}},
 	}

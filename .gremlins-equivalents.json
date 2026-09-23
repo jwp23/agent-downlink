@@ -1,1 +1,9 @@
-[]
+[
+  {
+    "file": "internal/rclone/classify.go",
+    "line": 74,
+    "column": 35,
+    "type": "ARITHMETIC_BASE",
+    "reason": "64*1024 is only the scanner's initial buffer capacity. The mutation makes it 64/1024 = 0; bufio.Scanner then allocates its default 4096-byte buffer on first use and doubles it up to the same 1 MiB maximum, so every input scans identically. Confirmed empirically: with the mutation hand-applied the full package suite, including the 100 KiB line case, still passes."
+  }
+]

@@ -21,10 +21,15 @@ phantom timeout. `GOFLAGS=-count=1` bypasses the cache and removed all of them.
 - Adopt gremlins v0.6.0, installed by commit hash, as a required CI check that mutates the
   whole module on every pull request. No diff scoping, no scheduled sweep, no sharding: the
   whole run costs about as much as the lint job.
-- The bar is zero unexcluded mutants in any non-KILLED status. gremlins can only fail a run
-  on a kill percentage, so a small program, `tools/gremlinsgate`, reads gremlins' JSON
-  report and fails on any mutant that is LIVED, NOT COVERED, TIMED OUT or NOT VIABLE unless
-  a reviewed allowlist names it.
+- The bar is zero unexcluded LIVED, TIMED OUT or NOT VIABLE mutants. gremlins can only fail
+  a run on a kill percentage, so a small program, `tools/gremlinsgate`, reads gremlins' JSON
+  report and fails on any such mutant unless a reviewed allowlist names it. NOT COVERED
+  mutants are reported as information and do not fail the gate: gremlins never runs them, so
+  they carry no information about test strength, and statement coverage is already measured
+  by SonarCloud. On this module 18 of the 25 NOT COVERED mutants were on the `case` lines of
+  tagless `switch` statements, which Go's `cover` tool emits no block for even though tests
+  exercise every branch; gating on them would have meant 18 line-pinned allowlist entries
+  that break on any edit above them.
 - Scope lives in one file, `.gremlins.yaml`, shared by CI and local runs. Excluded: `e2e/`
   (behind a build tag, so gremlins sees no tests for it), `tools/` (development utilities),
   and `main.go` (process bootstrap that the code style already keeps out of tests). Every
@@ -49,6 +54,10 @@ phantom timeout. `GOFLAGS=-count=1` bypasses the cache and removed all of them.
 - gomu applies a richer operator set and is actively developed, but is young and produces
   several times as many mutants per package, which at adoption time is more to burn down
   than it is insight. Rejected for now.
+- Gating on NOT COVERED too, with a reviewed allowlist for the tagless-switch false positives,
+  was rejected: the allowlist would start at 18 entries and grow with every tagless switch,
+  each pinned to a line and column, which either taxes every edit to those files or pushes
+  code style toward if/else chains to suit the tool.
 - A kill-rate threshold is what gremlins offers natively and needs no extra tool. It lets
   any individual gap hide inside a percentage, and the percentage drifts as code is added.
   Rejected in favour of the per-mutant bar and allowlist.

@@ -192,12 +192,22 @@ func parseReport(data []byte) (report, error) {
 	if len(r.Files) == 0 {
 		return report{}, fmt.Errorf("parse gremlins report: no files in report")
 	}
+	found := false
 	for _, f := range r.Files {
-		if len(f.Mutations) > 0 {
-			return r, nil
+		if f.FileName == "" {
+			return report{}, fmt.Errorf("parse gremlins report: a file entry has no file_name")
+		}
+		for _, m := range f.Mutations {
+			if m.Type == "" || m.Line == 0 || m.Column == 0 {
+				return report{}, fmt.Errorf("parse gremlins report: %s has a mutation with a missing type, line, or column", f.FileName)
+			}
+			found = true
 		}
 	}
-	return report{}, fmt.Errorf("parse gremlins report: no mutations in report")
+	if !found {
+		return report{}, fmt.Errorf("parse gremlins report: no mutations in report")
+	}
+	return r, nil
 }
 
 // loadEquivalents reads the reviewed-equivalents allowlist. An empty path means no

@@ -63,6 +63,23 @@ func TestFindViolationsRejectsReportWithNoFiles(t *testing.T) {
 	}
 }
 
+// A mutation with no type, line, or column carries no identity: the gate cannot say what
+// was tested, so a report containing one is rejected outright rather than silently counted
+// as clean.
+func TestFindViolationsRejectsMutationMissingIdentityFields(t *testing.T) {
+	report := `{"files":[{"file_name":"a.go","mutations":[{"status":"KILLED"}]}]}`
+	if _, err := findViolations([]byte(report), nil); err == nil {
+		t.Fatal("expected an error for a mutation missing type, line, and column")
+	}
+}
+
+func TestFindViolationsRejectsFileMissingFileName(t *testing.T) {
+	report := `{"files":[{"mutations":[{"type":"CONDITIONALS_BOUNDARY","status":"KILLED","line":1,"column":1}]}]}`
+	if _, err := findViolations([]byte(report), nil); err == nil {
+		t.Fatal("expected an error for a file entry missing file_name")
+	}
+}
+
 func TestFindViolationsRejectsReportWithNoMutations(t *testing.T) {
 	report := `{"files":[{"file_name":"a.go","mutations":[]},{"file_name":"b.go","mutations":[]}]}`
 	if _, err := findViolations([]byte(report), nil); err == nil {

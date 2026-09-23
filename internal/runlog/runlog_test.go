@@ -3,6 +3,7 @@ package runlog
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -143,5 +144,18 @@ func TestAnEntryThatLandsExactlyOnTheLimitDoesNotRotate(t *testing.T) {
 	}
 	if got := read(t, l.Path); int64(len(got)) != l.MaxBytes {
 		t.Errorf("log is %d bytes, want %d", len(got), l.MaxBytes)
+	}
+}
+
+// TestAppendReportsAFailedWrite uses /dev/full, which accepts the open and fails every
+// write with ENOSPC, so the write error path runs without faking the file system.
+func TestAppendReportsAFailedWrite(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("/dev/full exists only on Linux")
+	}
+	l := &Log{Path: "/dev/full", MaxBytes: 5 << 20}
+	err := l.Append(at, "push", "ok", "")
+	if err == nil || !strings.Contains(err.Error(), "no space left on device") {
+		t.Errorf("Append to /dev/full = %v, want the write error", err)
 	}
 }

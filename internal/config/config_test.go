@@ -2,6 +2,8 @@ package config
 
 import (
 	"bytes"
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -215,5 +217,33 @@ func TestValidate(t *testing.T) {
 	localBucket.Storage = "/tmp/scratch-bucket" // an absolute local path stands in for B2 in integration tests
 	if err := localBucket.Validate(); err != nil {
 		t.Errorf("absolute local storage: Validate() = %v", err)
+	}
+}
+
+// TestSaveReportsARenameFailure covers the rename step on its own: CreateTemp and the
+// writes succeed, then the rename onto a path that is a directory fails and Save must say
+// so rather than fall through to the directory sync and report success.
+func TestSaveReportsARenameFailure(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	if err := os.Mkdir(path, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := validFile().Save(path); err == nil {
+		t.Fatal("Save = nil error, want the rename onto a directory to fail")
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("temporary file left behind after a failed rename: %v", entries)
+	}
+}
+
+func TestSyncDirReportsAMissingDirectory(t *testing.T) {
+	err := syncDir(filepath.Join(t.TempDir(), "missing"))
+	if !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("syncDir = %v, want fs.ErrNotExist", err)
 	}
 }

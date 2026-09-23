@@ -551,8 +551,13 @@ func TestLocalCopyRecordsWorstOutcomeAndDetailsAcrossPaths(t *testing.T) {
 	if ws.cycle.localCopy(ctx) {
 		t.Error("localCopy reported success although one path does not exist")
 	}
-	if !strings.Contains(ws.errors.String(), "local-copy FAILED") {
-		t.Errorf("errors = %q", ws.errors.String())
+	for _, want := range []string{"local-copy FAILED", "claude-code/does-not-exist:", "directory not found"} {
+		if !strings.Contains(ws.errors.String(), want) {
+			t.Errorf("errors = %q, want it to contain %q", ws.errors.String(), want)
+		}
+	}
+	if strings.Contains(ws.errors.String(), "claude-code/projects:") {
+		t.Errorf("errors = %q, want no detail for the path that copied cleanly", ws.errors.String())
 	}
 }
 

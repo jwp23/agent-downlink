@@ -15,7 +15,11 @@ go vet ./...
 golangci-lint run               # config in .golangci.yml
 go test ./...                   # unit and integration tests (real rclone, local directory bucket)
 go test -tags e2e ./e2e/ -v     # end-to-end against a real B2 scratch bucket; never in CI; see e2e/README.md
+GOFLAGS=-count=1 gremlins unleash -o gremlins-report.json .   # mutation testing; see ADR-005
+go run ./tools/gremlinsgate -report gremlins-report.json -equivalents .gremlins-equivalents.json
 ```
+
+CI runs the mutation gate on every pull request (ADR-005): a LIVED, TIMED OUT or NOT VIABLE mutant fails it unless `.gremlins-equivalents.json` records a reviewed proof that no test can tell the mutant from the original. `GOFLAGS=-count=1` is mandatory; a cached coverage pass shrinks every mutant's timeout to milliseconds. Install gremlins with `go install github.com/go-gremlins/gremlins/cmd/gremlins@e05b1d47b8c55748e50abc28ff6b132c536bacca`.
 
 This project uses **bd** (beads) for issue tracking. Run `bd prime` for full workflow context.
 

@@ -181,7 +181,7 @@ recommended on readers and not enforced.
 
 ## Development
 
-Install rclone and golangci-lint before running tests (integration tests fail without rclone).
+Install rclone, golangci-lint and gremlins (`go install github.com/go-gremlins/gremlins/cmd/gremlins@e05b1d47b8c55748e50abc28ff6b132c536bacca`) before running tests; integration tests fail without rclone, and CI gates every pull request on mutation testing (see `docs/adr/005-mutation-testing-whole-module-on-every-pr.md`).
 
 ```sh
 go build .                          # builds ./agent-downlink
@@ -190,6 +190,8 @@ go vet ./...
 golangci-lint run                   # config in .golangci.yml
 go test ./...                       # unit and integration tests
 go test -tags e2e ./e2e/ -v         # end-to-end against a real B2 bucket (see e2e/README.md)
+GOFLAGS=-count=1 gremlins unleash -o gremlins-report.json .   # mutation testing; see ADR-005
+go run ./tools/gremlinsgate -report gremlins-report.json -equivalents .gremlins-equivalents.json
 ```
 
 The first four commands run in the pre-commit hook. The e2e suite requires real B2 credentials

@@ -224,3 +224,18 @@ func TestUnsupportedOS(t *testing.T) {
 		}
 	}
 }
+
+func TestRunReportsTheCommandItsStatusAndItsOutput(t *testing.T) {
+	err := run("sh", "-c", "echo unit not found >&2; exit 3")
+	if err == nil {
+		t.Fatal("run = nil, want the failure")
+	}
+	for _, want := range []string{"sh -c echo unit not found >&2; exit 3", "exit status 3", "unit not found"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error = %q, want it to contain %q", err, want)
+		}
+	}
+	if err := run("sh", "-c", "exit 0"); err != nil {
+		t.Errorf("run of a succeeding command = %v, want nil", err)
+	}
+}

@@ -10,3 +10,4 @@
 # Local beads audit trail; the issue data itself syncs through Dolt
 .beads/interactions.jsonl
 coverage.out
+gremlins-report.json

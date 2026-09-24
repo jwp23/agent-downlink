@@ -216,7 +216,8 @@ is recommended on readers and not enforced.
 | Timer definitions | Generated systemd and launchd files compared with expected files. Installation is verified by hand once per OS. |
 | Integration | The real rclone binary with real `crypt` encryption over a local directory standing in for the bucket. No network, no mocks. These tests fail, rather than skip, when rclone is absent. |
 | End-to-end | Behind a build tag, against a real scratch B2 bucket. Proves that a no-delete key can push, that an overwrite preserves the prior version, that a file appended to during upload is completed by the next run, and that a second machine can pull and decrypt. |
-| CI | Unit and integration layers on Linux and macOS. The end-to-end layer runs only on the operator's machines, since a public repository cannot safely give storage credentials to pull requests from forks. |
+| Mutation | gremlins mutates the whole module on every pull request; `tools/gremlinsgate` fails the run on any mutant that lived, timed out or did not compile, unless `.gremlins-equivalents.json` records a reviewed proof that no test can distinguish it. Scope is in `.gremlins.yaml`. See ADR-005. |
+| CI | Unit and integration layers on Linux and macOS; the mutation layer on Linux. The end-to-end layer runs only on the operator's machines, since a public repository cannot safely give storage credentials to pull requests from forks. |
 
 Fixtures use placeholder machine names.
 

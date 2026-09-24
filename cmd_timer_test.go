@@ -23,6 +23,12 @@ func markTimerInstalled(t *testing.T, home string) {
 	}
 }
 
+func timerUnitExists(t *testing.T, home string) bool {
+	t.Helper()
+	_, err := os.Stat(filepath.Join(home, ".config", "systemd", "user", "agent-downlink.timer"))
+	return err == nil
+}
+
 func TestTimerNeedsInstallOrRemove(t *testing.T) {
 	for _, args := range [][]string{{"timer"}, {"timer", "frobnicate"}, {"timer", "install", "extra"}} {
 		e, _, stderr := testEnv(t)
@@ -64,6 +70,9 @@ func TestTimerInstallSucceeds(t *testing.T) {
 	if !strings.Contains(stdout.String(), "Hourly schedule installed") {
 		t.Errorf("stdout = %q, want the install confirmation", stdout.String())
 	}
+	if !timerUnitExists(t, e.home) {
+		t.Error("timer install wrote no timer unit")
+	}
 }
 
 func TestTimerRemoveSucceeds(t *testing.T) {
@@ -75,6 +84,9 @@ func TestTimerRemoveSucceeds(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), "Hourly schedule removed") {
 		t.Errorf("stdout = %q, want the remove confirmation", stdout.String())
+	}
+	if timerUnitExists(t, e.home) {
+		t.Error("timer remove left the timer unit in place")
 	}
 }
 

@@ -63,8 +63,9 @@ func TestRcloneConfWithoutB2OmitsTheSection(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, _ := os.ReadFile(path)
-	if strings.Contains(string(got), "[b2]") || !strings.Contains(string(got), "remote = /srv/bucket/workstation\n") {
-		t.Errorf("rclone.conf =\n%s", got)
+	want := "[crypt-workstation]\ntype = crypt\nremote = /srv/bucket/workstation\npassword = obscuredA\n"
+	if string(got) != want {
+		t.Errorf("rclone.conf =\n%q\nwant\n%q", got, want)
 	}
 	loaded, err := LoadRcloneConf(path)
 	if err != nil || loaded.B2 != nil {

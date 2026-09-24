@@ -3,6 +3,7 @@ package runlog
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -125,5 +126,36 @@ func TestAnEntryLargerThanTheLimitIsStillWritten(t *testing.T) {
 func TestDefaultLimitIsFiveMiB(t *testing.T) {
 	if got := New("x").MaxBytes; got != 5<<20 {
 		t.Errorf("MaxBytes = %d, want %d", got, 5<<20)
+	}
+}
+
+func TestAnEntryThatLandsExactlyOnTheLimitDoesNotRotate(t *testing.T) {
+	l := New(filepath.Join(t.TempDir(), "agent-downlink.log"))
+	const entryBytes = len("2026-03-01T09:00:00Z  push  ok\n")
+	l.MaxBytes = int64(2 * entryBytes)
+	if err := l.Append(at, "push", "ok", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := l.Append(at, "push", "ok", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(l.Path + ".1"); !os.IsNotExist(err) {
+		t.Fatalf("rotated although the second entry fits exactly (err = %v)", err)
+	}
+	if got := read(t, l.Path); int64(len(got)) != l.MaxBytes {
+		t.Errorf("log is %d bytes, want %d", len(got), l.MaxBytes)
+	}
+}
+
+// TestAppendReportsAFailedWrite uses /dev/full, which accepts the open and fails every
+// write with ENOSPC, so the write error path runs without faking the file system.
+func TestAppendReportsAFailedWrite(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("/dev/full exists only on Linux")
+	}
+	l := &Log{Path: "/dev/full", MaxBytes: 5 << 20}
+	err := l.Append(at, "push", "ok", "")
+	if err == nil || !strings.Contains(err.Error(), "no space left on device") {
+		t.Errorf("Append to /dev/full = %v, want the write error", err)
 	}
 }

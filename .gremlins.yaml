@@ -1,0 +1,29 @@
+# Mutation-testing scope for the Go module. See ADR-005
+# (docs/adr/005-mutation-testing-whole-module-on-every-pr.md) for the decision this
+# encodes and the bar it sets: zero unexcluded LIVED, TIMED OUT or NOT VIABLE mutants,
+# enforced by tools/gremlinsgate against the run's JSON report.
+#
+# Every run must set GOFLAGS=-count=1: gremlins sizes the per-mutant timeout from its own
+# coverage pass, and a cached pass measures milliseconds, which turns every rclone-backed
+# test into a phantom TIMED OUT.
+unleash:
+  # The integration tests spawn real rclone processes; the coefficient keeps a slow CI
+  # runner from timing them out. Measured: 0 timeouts at 30 with the cache bypassed.
+  timeout-coefficient: 30
+  # One mutant at a time. Parallel test binaries all running rclone starve each other of
+  # CPU and produce timeouts that are noise rather than gaps.
+  workers: 1
+  exclude-files:
+    # Behind a build tag; gremlins sees no tests for it.
+    - "^e2e/"
+    # Development utilities, including gremlinsgate itself.
+    - "^tools/"
+    # Process bootstrap: the code style keeps os.UserHomeDir and os.Args out of tests, and
+    # its only mutant is the home-directory failure branch. dispatch and cmd_*.go stay in.
+    - "^main\\.go$"
+
+# An ordinary counted loop becomes a permanent infinite loop under this mutator, which can
+# only ever time out. Disabled module-wide rather than chased loop by loop.
+mutants:
+  increment-decrement:
+    enabled: false

@@ -291,8 +291,12 @@ func TestReplaceConfigPairRestoresOldConfigWhenSecretsSaveFails(t *testing.T) {
 	}
 
 	newCfg := config.File{Machine: "laptop", Storage: "b2:new-bucket", Mirror: paths.DefaultMirror, Tools: []string{"claude-code"}}
-	if err := replaceConfigPair(paths, newCfg, config.RcloneConf{Passwords: map[string]string{}}); err == nil {
+	err := replaceConfigPair(paths, newCfg, config.RcloneConf{Passwords: map[string]string{}})
+	if err == nil {
 		t.Fatal("replaceConfigPair = nil error, want the rclone.conf write failure")
+	}
+	if strings.Contains(err.Error(), "could not be restored") {
+		t.Errorf("error = %v, but the previous config.toml was restored", err)
 	}
 	got, err := config.Load(paths.ConfigFile)
 	if err != nil || got.Machine != "workstation" || got.Storage != "b2:old-bucket" {

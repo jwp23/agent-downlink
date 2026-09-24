@@ -261,3 +261,25 @@ func TestObscureErrorDoesNotRevealTheSecret(t *testing.T) {
 		t.Errorf("Obscure error = %v, want an error that does not contain the secret", err)
 	}
 }
+
+// TestCopyReportsARcloneThatCannotBeStarted covers the case New cannot: the binary existed
+// when the Runner was built and is gone by the time it is run, as after an upgrade that
+// moved it.
+func TestCopyReportsARcloneThatCannotBeStarted(t *testing.T) {
+	dir := t.TempDir()
+	binary := filepath.Join(dir, "rclone-that-vanishes")
+	if err := os.WriteFile(binary, []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	r, err := New(binary, "/unused", Concurrency{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(binary); err != nil {
+		t.Fatal(err)
+	}
+	res := r.Copy(context.Background(), dir, filepath.Join(dir, "dst"))
+	if res.Outcome != Failure || res.ExitCode != -1 || !strings.Contains(res.Output, "could not run rclone") {
+		t.Errorf("Copy = %+v, want Failure, exit -1, 'could not run rclone'", res)
+	}
+}

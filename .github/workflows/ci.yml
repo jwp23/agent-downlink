@@ -108,3 +108,59 @@ jobs:
 
       - name: Govulncheck
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
+
+  # ADR-005: whole-module mutation testing on every pull request. Scope and the timeout
+  # coefficient live in .gremlins.yaml; gremlinsgate enforces the zero-unexcluded-survivors
+  # bar against .gremlins-equivalents.json. GOFLAGS=-count=1 keeps gremlins' coverage
+  # pass off Go's test cache, which would otherwise size every mutant's timeout at a few
+  # milliseconds and report the rclone-backed tests as timed out.
+  mutation:
+    name: Mutation testing
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      GOFLAGS: -count=1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Install rclone (Linux)
+        run: |
+          set -euo pipefail
+          # Unpack outside the checkout: anything in the checkout is treated as project source.
+          cd "$RUNNER_TEMP"
+          version=$(curl -fsS --proto '=https' --tlsv1.2 https://downloads.rclone.org/version.txt | awk '{print $2}')
+          zip="rclone-${version}-linux-amd64.zip"
+          curl -fsSO --proto '=https' --tlsv1.2 "https://downloads.rclone.org/${version}/${zip}"
+          curl -fsSO --proto '=https' --tlsv1.2 "https://downloads.rclone.org/${version}/SHA256SUMS"
+          sha256sum --ignore-missing -c SHA256SUMS
+          unzip -q "$zip"
+          sudo install -m 755 "rclone-${version}-linux-amd64/rclone" /usr/local/bin/rclone
+
+      # Pinned to v0.6.0's commit, not the tag: a tag can move, a commit hash cannot.
+      - name: Install gremlins
+        run: go install github.com/go-gremlins/gremlins/cmd/gremlins@e05b1d47b8c55748e50abc28ff6b132c536bacca # v0.6.0
+
+      - name: Build gremlinsgate
+        run: go build -o "$RUNNER_TEMP/gremlinsgate" ./tools/gremlinsgate
+
+      - name: Run gremlins
+        run: gremlins unleash -o gremlins-report.json .
+
+      - name: Enforce the gate
+        run: '"$RUNNER_TEMP/gremlinsgate" -report gremlins-report.json -equivalents .gremlins-equivalents.json'
+
+      - name: Upload gremlins report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: gremlins-report
+          path: gremlins-report.json

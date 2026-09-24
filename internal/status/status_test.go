@@ -111,3 +111,16 @@ func TestJSONShapeIsStableForConsumers(t *testing.T) {
 		t.Errorf("pull:laptop = %v, want no last_success and error boom", pull)
 	}
 }
+
+func TestRecordKeepsAnErrorOfExactlyTheLimit(t *testing.T) {
+	var lines []string
+	for i := 0; i < maxErrorLines; i++ {
+		lines = append(lines, "ERROR: file: Failed to copy")
+	}
+	text := strings.Join(lines, "\n")
+	var f File
+	f.Record("push", t0, false, text)
+	if got := f.Steps["push"].Error; got != text {
+		t.Errorf("error of %d lines was changed:\n%q", maxErrorLines, got)
+	}
+}

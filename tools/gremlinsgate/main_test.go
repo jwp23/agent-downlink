@@ -188,6 +188,66 @@ func TestLoadEquivalentsEmptyPathIsNoEquivalents(t *testing.T) {
 	}
 }
 
+func TestLoadEquivalentsRejectsDuplicateBasenameWithDifferentPaths(t *testing.T) {
+	path := t.TempDir() + "/equivalents.json"
+	body := `[
+		{"file":"pkg1/x.go","line":10,"column":5,"type":"CONDITIONALS_BOUNDARY","reason":"first"},
+		{"file":"pkg2/x.go","line":20,"column":6,"type":"CONDITIONALS_BOUNDARY","reason":"second"}
+	]`
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := loadEquivalents(path)
+	if err == nil {
+		t.Fatal("expected an error for duplicate basename with different paths")
+	}
+	if !strings.Contains(err.Error(), "x.go") {
+		t.Fatalf("error should mention the conflicting basename, got: %v", err)
+	}
+}
+
+func TestLoadEquivalentsMultipleDistinctBasenames(t *testing.T) {
+	path := t.TempDir() + "/equivalents.json"
+	body := `[
+		{"file":"pkg1/a.go","line":10,"column":5,"type":"CONDITIONALS_BOUNDARY","reason":"first"},
+		{"file":"pkg2/b.go","line":20,"column":6,"type":"CONDITIONALS_BOUNDARY","reason":"second"},
+		{"file":"pkg3/c.go","line":30,"column":7,"type":"CONDITIONALS_NEGATION","reason":"third"}
+	]`
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := loadEquivalents(path)
+	if err != nil {
+		t.Fatalf("loadEquivalents: %v", err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("loadEquivalents returned %d entries, want 3", len(got))
+	}
+}
+
+func TestLoadEquivalentsRealFileStillLoads(t *testing.T) {
+	// Verify the real .gremlins-equivalents.json (internal/rclone/classify.go and
+	// internal/transfer/cycle.go) loads without error - basenames are distinct.
+	got, err := loadEquivalents("../../.gremlins-equivalents.json")
+	if err != nil {
+		t.Fatalf("loadEquivalents real file: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("real .gremlins-equivalents.json has %d entries, want 2", len(got))
+	}
+	// Verify the entries have the expected files
+	files := make(map[string]bool)
+	for _, e := range got {
+		files[e.File] = true
+	}
+	if !files["internal/rclone/classify.go"] {
+		t.Fatal("expected internal/rclone/classify.go in real file")
+	}
+	if !files["internal/transfer/cycle.go"] {
+		t.Fatal("expected internal/transfer/cycle.go in real file")
+	}
+}
+
 func writeReport(t *testing.T, report string) string {
 	t.Helper()
 	path := t.TempDir() + "/report.json"

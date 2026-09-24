@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -228,6 +229,17 @@ func loadEquivalents(path string) ([]equivalent, error) {
 		if strings.TrimSpace(e.Reason) == "" {
 			return nil, fmt.Errorf("parse equivalents file: %s:%d:%d %s has an empty reason", e.File, e.Line, e.Column, e.Type)
 		}
+	}
+	// Check for basename collisions: two entries with the same basename but different
+	// full paths would cause ambiguous suffix matching in fileMatches when gremlins is
+	// scoped to a single package and reports bare filenames.
+	basenameToFile := make(map[string]string)
+	for _, e := range equivalents {
+		basename := filepath.Base(e.File)
+		if existing, found := basenameToFile[basename]; found && existing != e.File {
+			return nil, fmt.Errorf("parse equivalents file: basename collision: %q appears in both %q and %q", basename, existing, e.File)
+		}
+		basenameToFile[basename] = e.File
 	}
 	return equivalents, nil
 }
